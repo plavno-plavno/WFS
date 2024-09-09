@@ -13,10 +13,7 @@ from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 from whisper_live.vad import VoiceActivityDetector
 from whisper_live.transcriber import WhisperModel
-try:
-    from whisper_live.transcriber_tensorrt import WhisperTRTLLM
-except Exception:
-    pass
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -157,30 +154,7 @@ class TranscriptionServer:
         whisper_tensorrt_path, trt_multilingual
     ):
         client: Optional[ServeClientBase] = None
-
-        if self.backend.is_tensorrt():
-            try:
-                client = ServeClientTensorRT(
-                    websocket,
-                    multilingual=trt_multilingual,
-                    language=options["language"],
-                    task=options["task"],
-                    client_uid=options["uid"],
-                    model=whisper_tensorrt_path,
-                    single_model=self.single_model,
-                )
-                logging.info("Running TensorRT backend.")
-            except Exception as e:
-                logging.error(f"TensorRT-LLM not supported: {e}")
-                self.client_uid = options["uid"]
-                websocket.send(json.dumps({
-                    "uid": self.client_uid,
-                    "status": "WARNING",
-                    "message": "TensorRT-LLM not supported on Server yet. "
-                               "Reverting to available backend: 'faster_whisper'"
-                }))
-                self.backend = BackendType.FASTER_WHISPER
-
+        
         if self.backend.is_faster_whisper():
             if faster_whisper_custom_model_path is not None and os.path.exists(faster_whisper_custom_model_path):
                 logging.info(f"Using custom model {faster_whisper_custom_model_path}")
@@ -203,6 +177,8 @@ class TranscriptionServer:
 
         self.client_manager.add_client(websocket, client)
 
+    
+    
     def get_audio_from_websocket(self, websocket):
         """
         Receives audio buffer from websocket and creates a numpy array out of it.

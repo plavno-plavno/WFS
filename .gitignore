@@ -1,0 +1,91 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environment
+venv/
+ENV/
+env/
+env.bak/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Pytest cache
+.pytest_cache/
+.cache/
+
+# mypy
+.mypy_cache/
+
+# Logs and local database
+*.log
+*.sqlite3
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# dotenv environment variables
+.env
+.env.*
+
+# Sphinx documentation
+docs/_build/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Celery task queue
+celerybeat-schedule
+celerybeat.pid
+
+# Django stuff:
+*.mo
+*.pot
+**/migrations/
+
+# Flask instance folder
+instance/
+
+# Static and media files
+staticfiles/
+media/
