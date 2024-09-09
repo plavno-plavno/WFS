@@ -19,8 +19,8 @@ async def transcribe_audio(client_id, audio_file, langugage):
     print(f"Client {client_id} transcription result: {transcription}")
 
 async def main():
-    audio_file = "./my_voice.wav"
-    audio_file2 = "./az_voice.wav"
+    audio_file = "media/my_voice.wav"
+    audio_file2 = "media/az_voice.wav"
 
     my_list = [audio_file, audio_file2]
     
