@@ -13,7 +13,15 @@ from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 from whisper_live.vad import VoiceActivityDetector
 from whisper_live.transcriber import WhisperModel
-
+from socketify import App
+import websockets
+import os
+import logging
+import json
+import numpy as np
+import time
+import functools
+from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 
@@ -141,206 +149,99 @@ class TranscriptionServer:
     RATE = 16000
 
     def __init__(self):
-        self.client_manager = ClientManager()
-        self.no_voice_activity_chunks = 0
+        self.client_manager = {}
         self.use_vad = True
         self.single_model = False
+        self.backend = None
 
-    def initialize_client(
-        self, websocket, options, faster_whisper_custom_model_path):
-        client: Optional[ServeClientBase] = None
+    async def initialize_client(self, websocket, options, faster_whisper_custom_model_path):
+        if 'language' not in options:
+            raise ValueError("Missing 'language' in options")
         
-        if self.backend.is_faster_whisper():
-            if faster_whisper_custom_model_path is not None and os.path.exists(faster_whisper_custom_model_path):
-                logging.info(f"Using custom model {faster_whisper_custom_model_path}")
-                options["model"] = faster_whisper_custom_model_path
-            client = ServeClientFasterWhisper(
-                websocket,
-                language=options["language"],
-                task=options["task"],
-                client_uid=options["uid"],
-                model=options["model"],
-                initial_prompt=options.get("initial_prompt"),
-                vad_parameters=options.get("vad_parameters"),
-                use_vad=self.use_vad,
-                single_model=self.single_model,
-            )
-            logging.info("Running faster_whisper backend.")
+        client = None  
+        self.client_manager[websocket] = client
 
-        if client is None:
-            raise ValueError(f"Backend type {self.backend.value} not recognised or not handled.")
-
-        self.client_manager.add_client(websocket, client)
-
-    
-    
-    def get_audio_from_websocket(self, websocket):
-        """
-        Receives audio buffer from websocket and creates a numpy array out of it.
-
-        Args:
-            websocket: The websocket to receive audio from.
-
-        Returns:
-            A numpy array containing the audio.
-        """
-        frame_data = websocket.recv()
-        if frame_data == b"END_OF_AUDIO":
-            return False
-        return np.frombuffer(frame_data, dtype=np.float32)
-
-    def handle_new_connection(self, websocket, faster_whisper_custom_model_path):
+    async def get_audio_from_websocket(self, websocket):
         try:
-            logging.info("New client connected")
-            options = websocket.recv()
-            options = json.loads(options)
-            self.use_vad = options.get('use_vad')
-            if self.client_manager.is_server_full(websocket, options):
-                websocket.close()
-                return False  # Indicates that the connection should not continue
-
-            self.initialize_client(websocket, options, faster_whisper_custom_model_path)
-            return True
-        except json.JSONDecodeError:
-            logging.error("Failed to decode JSON from client")
+            frame_data = await websocket.recv()  
+            if frame_data is None:
+                return False
+            if frame_data == b"END_OF_AUDIO":
+                return False
+            return np.frombuffer(frame_data, dtype=np.float32)
+        except Exception as e:
+            print(f"Error receiving audio data: {e}")
             return False
-        except ConnectionClosed:
-            logging.info("Connection closed by client")
+
+    async def handle_new_connection(self, websocket, options, faster_whisper_custom_model_path):
+        try:
+            print("New client connected")
+            self.use_vad = options.get('use_vad', True)
+            await self.initialize_client(websocket, options, faster_whisper_custom_model_path)
+            return True
+        except KeyError as e:
+            print(f"Missing key in options: {e}")
+            await websocket.close()
             return False
         except Exception as e:
-            logging.error(f"Error during new connection initialization: {str(e)}")
+            print(f"Error during new connection initialization: {str(e)}")
+            await websocket.close()
             return False
 
-    def process_audio_frames(self, websocket):
-        frame_np = self.get_audio_from_websocket(websocket)
-        client = self.client_manager.get_client(websocket)
-
-        if frame_np is False or frame_np is None or frame_np.size == 0:
+    async def process_audio_frames(self, websocket):
+        frame_np = await self.get_audio_from_websocket(websocket)
+        if frame_np is None or frame_np.size == 0:
             return False
 
-        client.add_frames(frame_np)
+        client = self.client_manager.get(websocket)
+        if client:
+            client.add_frames(frame_np)
         return True
 
-    def recv_audio(
-        self,
-        websocket,
-        backend: BackendType = BackendType.FASTER_WHISPER,
-        faster_whisper_custom_model_path=None):
-        """
-        Receive audio chunks from a client in an infinite loop.
+    async def recv_audio(self, websocket, options, faster_whisper_custom_model_path=None):
+        if 'language' not in options:
+            print("Error: Missing 'language' in options")
+            await websocket.close()
+            return
 
-        Continuously receives audio frames from a connected client
-        over a WebSocket connection. It processes the audio frames using a
-        voice activity detection (VAD) model to determine if they contain speech
-        or not. If the audio frame contains speech, it is added to the client's
-        audio data for ASR.
-        If the maximum number of clients is reached, the method sends a
-        "WAIT" status to the client, indicating that they should wait
-        until a slot is available.
-        If a client's connection exceeds the maximum allowed time, it will
-        be disconnected, and the client's resources will be cleaned up.
+        self.backend = options.get("backend", "FASTER_WHISPER")
 
-        Args:
-            websocket (WebSocket): The WebSocket connection for the client.
-            backend (str): The backend to run the server with.
-            faster_whisper_custom_model_path (str): path to custom faster whisper model.
-            whisper_tensorrt_path (str): Required for tensorrt backend.
-            trt_multilingual(bool): Only used for tensorrt, True if multilingual model.
-
-        Raises:
-            Exception: If there is an error during the audio frame processing.
-        """
-        self.backend = backend
-        if not self.handle_new_connection(websocket, faster_whisper_custom_model_path):
+        if not await self.handle_new_connection(websocket, options, faster_whisper_custom_model_path):
             return
 
         try:
-            while not self.client_manager.is_client_timeout(websocket):
-                if not self.process_audio_frames(websocket):
+            while True:
+                frame_np = await self.get_audio_from_websocket(websocket)
+                if frame_np is False or frame_np is None or frame_np.size == 0:
                     break
-        except ConnectionClosed:
-            logging.info("Connection closed by client")
+
+                # İşlenmiş ses verilerini işleme ekleyin
+                client = self.client_manager.get(websocket)
+                if client:
+                    client.add_frames(frame_np)
+
         except Exception as e:
-            logging.error(f"Unexpected error: {str(e)}")
+            print(f"Unexpected error: {str(e)}")
         finally:
-            if self.client_manager.get_client(websocket):
-                self.cleanup(websocket)
-                websocket.close()
-            del websocket
+            if websocket in self.client_manager:
+                await self.cleanup(websocket)
+                await websocket.close()
 
-    def run(self,
-            host,
-            port=9090,
-            backend="tensorrt",
-            faster_whisper_custom_model_path=None,
-            single_model=False):
-        """
-        Run the transcription server.
+    async def start_server(self, host, port, backend, faster_whisper_custom_model_path, single_model):
+        self.single_model = single_model
 
-        Args:
-            host (str): The host address to bind the server.
-            port (int): The port number to bind the server.
-        """
-        if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
-            raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
-        if single_model:
-            if faster_whisper_custom_model_path:
-                logging.info("Custom model option was provided. Switching to single model mode.")
-                self.single_model = True
-                # TODO: load model initially
-            else:
-                logging.info("Single model mode currently only works with custom models.")
-        if not BackendType.is_valid(backend):
-            raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
-        with serve(
-            functools.partial(
-                self.recv_audio,
-                backend=BackendType(backend),
-                faster_whisper_custom_model_path=faster_whisper_custom_model_path),
-            host,
-            port
-        ) as server:
-            server.serve_forever()
+        async def handler(websocket, path):
+            options = await websocket.recv()
+            options = json.loads(options)
+            await self.recv_audio(websocket, options, faster_whisper_custom_model_path)
 
-    def voice_activity(self, websocket, frame_np):
-        """
-        Evaluates the voice activity in a given audio frame and manages the state of voice activity detection.
+        server = await websockets.serve(handler, host, port)
+        print(f"Server listening on ws://{host}:{port}")
+        await server.wait_closed()
 
-        This method uses the configured voice activity detection (VAD) model to assess whether the given audio frame
-        contains speech. If the VAD model detects no voice activity for more than three consecutive frames,
-        it sets an end-of-speech (EOS) flag for the associated client. This method aims to efficiently manage
-        speech detection to improve subsequent processing steps.
-
-        Args:
-            websocket: The websocket associated with the current client. Used to retrieve the client object
-                    from the client manager for state management.
-            frame_np (numpy.ndarray): The audio frame to be analyzed. This should be a NumPy array containing
-                                    the audio data for the current frame.
-
-        Returns:
-            bool: True if voice activity is detected in the current frame, False otherwise. When returning False
-                after detecting no voice activity for more than three consecutive frames, it also triggers the
-                end-of-speech (EOS) flag for the client.
-        """
-        if not self.vad_detector(frame_np):
-            self.no_voice_activity_chunks += 1
-            if self.no_voice_activity_chunks > 3:
-                client = self.client_manager.get_client(websocket)
-                if not client.eos:
-                    client.set_eos(True)
-                time.sleep(0.1)    # Sleep 100m; wait some voice activity.
-            return False
-        return True
-
-    def cleanup(self, websocket):
-        """
-        Cleans up resources associated with a given client's websocket.
-
-        Args:
-            websocket: The websocket associated with the client to be cleaned up.
-        """
-        if self.client_manager.get_client(websocket):
-            self.client_manager.remove_client(websocket)
+    async def cleanup(self, websocket):
+        if websocket in self.client_manager:
+            del self.client_manager[websocket]
 
 
 class ServeClientBase(object):
@@ -867,3 +768,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.timestamp_offset += offset
 
         return last_segment
+
+
+if __name__ == "__main__":
+    server = TranscriptionServer()
+    server.run("localhost", 9090)

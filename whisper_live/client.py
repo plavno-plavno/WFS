@@ -13,7 +13,7 @@ import time
 import ffmpeg
 import whisper_live.utils as utils
 
-
+#test
 class Client:
     """
     Handles communication with a server using WebSocket.
@@ -683,13 +683,20 @@ class TranscriptionClient(TranscriptionTeeClient):
         log_transcription=True,
     ):
         self.client = Client(host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
+        print(1)
         if save_output_recording and not output_recording_filename.endswith(".wav"):
+            print(2)
             raise ValueError(f"Please provide a valid `output_recording_filename`: {output_recording_filename}")
+        print(3)
         if not output_transcription_path.endswith(".srt"):
+            print(4)
             raise ValueError(f"Please provide a valid `output_transcription_path`: {output_transcription_path}. The file extension should be `.srt`.")
+        print(5)
+        print(save_output_recording, output_recording_filename)
         TranscriptionTeeClient.__init__(
             self,
             [self.client],
             save_output_recording=save_output_recording,
             output_recording_filename=output_recording_filename
         )
+        print(6)
