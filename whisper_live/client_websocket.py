@@ -1,18 +1,17 @@
 import os
 import shutil
 import wave
-
 import logging
 import numpy as np
 import pyaudio
 import threading
 import json
-import websocket
 import uuid
 import time
 import ffmpeg
 import whisper_live.utils as utils
 
+from socketify import WebSocketClient
 
 class Client:
     INSTANCES = {}
@@ -51,14 +50,12 @@ class Client:
 
         if host is not None and port is not None:
             socket_url = f"ws://{host}:{port}"
-            self.client_socket = websocket.WebSocketApp(
+            self.client_socket = WebSocketClient(
                 socket_url,
-                on_open=lambda ws: self.on_open(ws),
-                on_message=lambda ws, message: self.on_message(ws, message),
-                on_error=lambda ws, error: self.on_error(ws, error),
-                on_close=lambda ws, close_status_code, close_msg: self.on_close(
-                    ws, close_status_code, close_msg
-                ),
+                open=self.on_open,
+                message=self.on_message,
+                error=self.on_error,
+                close=self.on_close,
             )
         else:
             print("[ERROR]: No host or port specified.")
@@ -66,8 +63,8 @@ class Client:
 
         Client.INSTANCES[self.uid] = self
 
-        # start websocket client in a thread
-        self.ws_thread = threading.Thread(target=self.client_socket.run_forever)
+        # Start the WebSocket client in a thread
+        self.ws_thread = threading.Thread(target=self.client_socket.run)
         self.ws_thread.setDaemon(True)
         self.ws_thread.start()
 
@@ -109,7 +106,7 @@ class Client:
             utils.clear_screen()
             utils.print_transcript(text)
 
-    def on_message(self, ws, message):
+    def on_message(self, message):
         message = json.loads(message)
 
         if self.uid != message.get("uid"):
@@ -142,19 +139,19 @@ class Client:
         if "segments" in message.keys():
             self.process_segments(message["segments"])
 
-    def on_error(self, ws, error):
+    def on_error(self, error):
         print(f"[ERROR] WebSocket Error: {error}")
         self.server_error = True
         self.error_message = error
 
-    def on_close(self, ws, close_status_code, close_msg):
+    def on_close(self, close_status_code, close_msg):
         print(f"[INFO]: Websocket connection closed: {close_status_code}: {close_msg}")
         self.recording = False
         self.waiting = False
 
-    def on_open(self, ws):
+    def on_open(self):
         print("[INFO]: Opened connection")
-        ws.send(
+        self.client_socket.send(
             json.dumps(
                 {
                     "uid": self.uid,
@@ -168,7 +165,7 @@ class Client:
 
     def send_packet_to_server(self, message):
         try:
-            self.client_socket.send(message, websocket.ABNF.OPCODE_BINARY)
+            self.client_socket.send(message)
         except Exception as e:
             print(e)
 
@@ -257,8 +254,9 @@ class TranscriptionTeeClient:
             client.write_srt_file(client.srt_file_path)
 
     def multicast_packet(self, packet, unconditional=False):
+        """Multicast packets to all clients."""
         for client in self.clients:
-            if (unconditional or client.recording):
+            if unconditional or client.recording:
                 client.send_packet_to_server(packet)
 
     def play_file(self, filename):
@@ -463,12 +461,25 @@ class TranscriptionClient(TranscriptionTeeClient):
         output_transcription_path="./output.srt",
         log_transcription=True,
     ):
-        self.client = Client(host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
-        print('i am nhere in')
+        # Initialize the WebSocket client using the Socketify-based Client class
+        self.client = Client(
+            host,
+            port,
+            lang,
+            translate,
+            model,
+            srt_file_path=output_transcription_path,
+            use_vad=use_vad,
+            log_transcription=log_transcription,
+        )
+        
+        # Validation for the output recording filename and transcription path
         if save_output_recording and not output_recording_filename.endswith(".wav"):
             raise ValueError(f"Please provide a valid `output_recording_filename`: {output_recording_filename}")
         if not output_transcription_path.endswith(".srt"):
             raise ValueError(f"Please provide a valid `output_transcription_path`: {output_transcription_path}. The file extension should be `.srt`.")
+        
+        # Initialize the TranscriptionTeeClient with the client and other params
         TranscriptionTeeClient.__init__(
             self,
             [self.client],
