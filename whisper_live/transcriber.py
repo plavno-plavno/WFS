@@ -291,8 +291,9 @@ class WhisperModel:
             - an instance of TranscriptionInfo
         """
         sampling_rate = self.feature_extractor.sampling_rate
-
+        print('i am here----- up ======---------',audio)
         if not isinstance(audio, np.ndarray):
+            print('i am here--------')
             audio = decode_audio(audio, sampling_rate=sampling_rate)
 
         duration = audio.shape[0] / sampling_rate
