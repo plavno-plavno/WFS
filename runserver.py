@@ -20,7 +20,7 @@ if __name__ == "__main__":
                         default='faster_whisper',
                         help='Backends from ["faster_whisper"]')
     parser.add_argument('--faster_whisper_custom_model_path', '-fw',
-                        type=str, default=None,
+                        type=str, default='medium',
                         help="Custom Faster Whisper Model")
     parser.add_argument('--omp_num_threads', '-omp',
                         type=int,
@@ -47,20 +47,21 @@ if __name__ == "__main__":
         # WebSocket message handler
         def websocket_message_handler(ws, message, opcode):
             """Handles incoming WebSocket messages."""
+            print('=========', id(ws.socket_data_id))
             try:
-                logging.debug(f"Received message: {message}")
+                #print(f"=====>RUNSERVER: Received message:")# {message}")
                 # Convert backend string to BackendType enum
                 backend_enum = BackendType(args.backend)
 
                 if isinstance(message, bytes):
                     # Pass the audio data as bytes directly to the transcription server
-                    logging.debug("Processing audio data.")
-                    server.recv_audio(ws, backend=backend_enum, faster_whisper_custom_model_path=args.faster_whisper_custom_model_path)
+                    #print("=====>RUNSERVER: rocessing audio data.", id(ws))
+                    server.recv_audio(ws, backend=backend_enum, faster_whisper_custom_model_path=args.faster_whisper_custom_model_path, message=message)
                 else:
                     # If the message is a JSON string, process it directly
-                    logging.debug("Processing JSON message.")
+                    #print("=====>RUNSERVER: rocessing JSON message.")
                     options = json.loads(message)  # Parse JSON directly from the message string
-                    logging.debug(f"Parsed JSON: {options}")
+                    #print(f"=====>RUNSERVER: Parsed JSON: {options}")
                     server.recv_audio(ws, options, backend=backend_enum, faster_whisper_custom_model_path=args.faster_whisper_custom_model_path)
             except Exception as e:
                 logging.error(f"Error processing message: {e}")
@@ -69,22 +70,22 @@ if __name__ == "__main__":
         # WebSocket close handler
         def websocket_close_handler(ws, code, message):
             """Handles WebSocket disconnection."""
-            logging.info(f"[INFO]: WebSocket connection closed with code: {code}, message: {message}")
+            # print(f"======>: WebSocket connection closed with code: {code}, message: {message}")
             server.cleanup(ws)
 
         # Add WebSocket route with handlers for open, message, close events
         app.ws("/*", {
-            "open": lambda ws: logging.info("New WebSocket connection opened."),
+            "open": lambda ws: print("======>New WebSocket connection opened.", id(ws.socket_data_id)),
             "message": websocket_message_handler,  # Handle incoming messages
             "close": websocket_close_handler       # Handle WebSocket close event
         })
 
         # Start listening on the provided port
-        app.listen(args.port, lambda token: logging.info(f"Listening on port {args.port}") if token else logging.error("Failed to listen."))
+        app.listen(args.port)
 
         # Keep server alive
-        logging.info("Running server... Press Ctrl+C to stop.")
+        #print("======>Running server... Press Ctrl+C to stop.")
         app.run()
 
     except Exception as e:
-        logging.error(f"Unexpected error occurred: {e}")
+        print(f"=====>Unexpected error occurred: {e}")
