@@ -54,23 +54,19 @@ if __name__ == "__main__":
                 backend_enum = BackendType(args.backend)
 
                 if isinstance(message, bytes):
-                    # Pass the audio data as bytes directly to the transcription server
-                    #print("=====>RUNSERVER: rocessing audio data.", id(ws))
+                    print('i am in if0---------')
                     server.recv_audio(ws, backend=backend_enum, faster_whisper_custom_model_path=args.faster_whisper_custom_model_path, message=message)
                 else:
-                    # If the message is a JSON string, process it directly
-                    #print("=====>RUNSERVER: rocessing JSON message.")
+                    print('i am in else-----')
                     options = json.loads(message)  # Parse JSON directly from the message string
-                    #print(f"=====>RUNSERVER: Parsed JSON: {options}")
                     server.recv_audio(ws, options, backend=backend_enum, faster_whisper_custom_model_path=args.faster_whisper_custom_model_path)
             except Exception as e:
-                logging.error(f"Error processing message: {e}")
+                logging.error(f"Error processing message----: {e}")
 
 
         # WebSocket close handler
         def websocket_close_handler(ws, code, message):
             """Handles WebSocket disconnection."""
-            # print(f"======>: WebSocket connection closed with code: {code}, message: {message}")
             server.cleanup(ws)
 
         # Add WebSocket route with handlers for open, message, close events

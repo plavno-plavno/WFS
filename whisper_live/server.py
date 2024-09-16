@@ -175,50 +175,49 @@ class TranscriptionServer:
         self.client_manager.add_client(ws, client)
         #print(f"Client added to ClientManager for WebSocket id={id(ws)}")
 
+    def get_audio_from_websocket(self,message, ws):
+        
+        """
+        Receives audio buffer from websocket and creates a numpy array out of it.
+
+        Args:
+            websocket: The websocket to receive audio from.
+
+        Returns:
+            A numpy array containing the audio.
+        """
+        frame_data = message
+        if frame_data == b"END_OF_AUDIO":
+            return False
+        return np.frombuffer(frame_data, dtype=np.float32)
+    
     def handle_new_connection(self, ws, options, faster_whisper_custom_model_path):
-        #print("TranscriptionServer: handle_new_connection called")
-        #print(f"Handling new connection for WebSocket id={id(ws)} with options={options}")
         try:
             pass
-            #logging.info("New client connected")
             self.use_vad = options.get('use_vad')
-            #print(f"VAD option set to {self.use_vad}")
 
             if self.client_manager.is_server_full(ws, options):
-                #print(f"Server is full, closing connection for WebSocket id={id(ws)}")
                 ws.close()
                 return False  # Indicates that the connection should not continue
 
-            # Initialize client after getting options
             self.initialize_client(ws, options, faster_whisper_custom_model_path)
             return True
         except json.JSONDecodeError:
             pass
-            #logging.error("Failed to decode JSON from client")
-            #print(f"JSON decoding failed for WebSocket id={id(ws)}")
             return False
         except Exception as e:
             pass
-            #logging.error(f"Error during new connection initialization: {str(e)}")
-            #print(f"Error initializing new connection for WebSocket id={id(ws)}: {str(e)}")
             return False
 
-    def process_audio_frames(self, ws, frame_data):
-        #print("TranscriptionServer: process_audio_frames called")
-        #print(f"Processing audio frames for WebSocket id={id(ws)}, frame data length={len(frame_data)}")
+    def process_audio_frames(self,message, ws):
+        frame_np = self.get_audio_from_websocket(ws,message)
         client = self.client_manager.get_client(ws)
-        #logging.info(f"Received frame data of length: {len(frame_data)}")
         
-        # Check if frame_data is valid
-        if frame_data is False or frame_data is None or len(frame_data) == 0:
-            #logging.error('Frame data is invalid or empty, no audio data received.')
-            #print(f"Invalid or empty frame data received for WebSocket id={id(ws)}")
+        if frame_np is False or frame_np is None or len(frame_np) == 0:
             return False
 
-        # Process the frame data
-        #logging.info(f"Processing {len(frame_data)} bytes of audio data")
         print(f"Adding frames for processing for WebSocket id={client}")
-        client.add_frames(frame_data)
+        client.add_frames(frame_np)
         return True
 
     def recv_audio(
@@ -228,66 +227,31 @@ class TranscriptionServer:
         backend: BackendType = BackendType.FASTER_WHISPER, 
         faster_whisper_custom_model_path=None
     ):
-        #print("TranscriptionServer: recv_audio called")
-        #print(f"Receiving audio or control messages for WebSocket id={id(ws)}")
+        print(dir(ws))
         self.backend = backend
         try:
-            pass
-            #logging.info('Message received in recv_audio')
-            pass
-            #logging.info(f'Message type: {type(message)}')
-            pass
-            #logging.info(f'Message content:')
-            #print(f"Message type: {type(message)}, content: ")
-
-            # Handle dict control messages (initial connection, options, etc.)
             if isinstance(message, dict):
-                pass
-                #logging.info('Processing JSON message (dict)')
-                #print(f"Processing JSON message for WebSocket id={id(ws)}")
-                # Pass the message to the initialization logic
+                print('in isintance-----------')
                 if not self.handle_new_connection(ws, message, faster_whisper_custom_model_path):
-                    pass
-                    #logging.error('Failed to handle new connection')
-                    #print(f"Failed to handle new connection for WebSocket id={id(ws)}")
                     return
 
-            # Handle binary audio data
             elif isinstance(message, bytes):
-                pass
-                #logging.info('Processing audio data')
-                #print(f"Processing audio data for WebSocket id={id(ws)}, message size={len(message)} bytes")
-                if not self.client_manager.is_client_timeout(ws):
-                    pass
-                    #logging.info('Client is active')
-                    #print(f"Client is active for WebSocket id={id(ws)}")
-                    if not self.process_audio_frames(ws, message):
-                        #logging.error('Failed to process audio frames')
-                        #print(f"Failed to process audio frames for WebSocket id={id(ws)}")
+                print('in elif isintance---------')
+                if not self.client_manager.is_client_timeout(ws.ws):
+                    if not self.process_audio_frames(ws.ws,message):
                         return
                 else:
                     pass
-                    #logging.info('Client timeout detected.')
-                    #print(f"Client timeout detected for WebSocket id={id(ws)}")
         except Exception as e:
-            logging.error(f"Unexpected error in recv_audio: {str(e)}")
-            #print(f"Unexpected error in recv_audio for WebSocket id={id(ws)}: {str(e)}")
+            logging.error(f"Unexpected error in recv_audio: {str(e)}-----------")
         
         finally:
-            if self.client_manager.get_client(ws):
-                print(222, self.client_manager.get_client(ws))
-                #logging.info('Cleaning up connection')
-                #print(f"Cleaning up connection for WebSocket id={id(ws)}")
-                # self.cleanup(ws)
-                # ws.close()
-                #print(f"Connection closed for WebSocket id={id(ws)}")
+            if self.client_manager.get_client(ws.ws):
+                print(222, self.client_manager.get_client(ws.ws))
 
     def cleanup(self, ws):
-        #print("TranscriptionServer: cleanup called")
-        #print(f"Cleaning up client for WebSocket id={id(ws)}")
         if self.client_manager.get_client(ws):
             self.client_manager.remove_client(ws)
-            #print(f"Client removed for WebSocket id={id(ws)}")
 
 
 
@@ -315,133 +279,91 @@ class ServeClientBase(object):
         self.transcript = []
         self.send_last_n_segments = 10
 
-        # text formatting
         self.pick_previous_segments = 2
 
-        # threading
         self.lock = threading.Lock()
-        #print(f"ServeClientBase initialized with client_uid={client_uid}")
 
     def speech_to_text(self):
-        #print("ServeClientBase: speech_to_text called")
         raise NotImplementedError("speech_to_text method must be implemented by subclass")
 
     def transcribe_audio(self):
-        #print("ServeClientBase: transcribe_audio called")
         raise NotImplementedError("transcribe_audio method must be implemented by subclass")
 
     def handle_transcription_output(self):
-        #print("ServeClientBase: handle_transcription_output called")
         raise NotImplementedError("handle_transcription_output method must be implemented by subclass")
 
     def add_frames(self, frame_np):
-        #print("ServeClientBase: add_frames called")
+        print("ServeClientBase: add_frames called")
+        print('her is frame np--------',frame_np)
         self.lock.acquire()
-        #print("Lock acquired for adding frames")
         if self.frames_np is not None:
+            print('i am in iff---------')
             arr = np.frombuffer(self.frames_np, dtype=np.uint8)
         if self.frames_np is not None and arr.shape[0] > 45 * self.RATE:
-            #print(f"Trimming audio buffer. Original frames size: {self.frames_np.shape[0]}")
             self.frames_offset += 30.0
             self.frames_np = self.frames_np[int(30 * self.RATE):]
-            pass
-            #logging.info(f"Audio buffer trimmed, new offset: {self.frames_offset}")
-            #print(f"New frames size after trimming: {self.frames_np.shape[0]}")
-            
-            # Check if the timestamp offset is smaller than the frames offset (implies no speech)
             if self.timestamp_offset < self.frames_offset:
-                #print(f"Updating timestamp_offset from {self.timestamp_offset} to {self.frames_offset}")
                 self.timestamp_offset = self.frames_offset
         
-        if self.frames_np is None:
-            #print("Initializing frames_np")
-            self.frames_np = copy.copy(frame_np)
+        if self.frame_np is None:
+
+            self.frames_np = frame_np.copy()
+
         else:
-            #print("Concatenating new frames to frames_np")
             self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
         
         pass
-        #logging.info(f"Total frames size after adding: {self.frames_np.shape[0]}")
-        #print(f"Total frames size after adding: {self.frames_np.shape[0]}")
         self.lock.release()
-        #print("Lock released after adding frames")
 
     def clip_audio_if_no_valid_segment(self):
-        #print("ServeClientBase: clip_audio_if_no_valid_segment called")
-        # Clip audio if current chunk exceeds 30 seconds and no valid segment was found
         arr = np.frombuffer(self.frames_np, dtype=np.uint8)
         if arr[int((self.timestamp_offset - self.frames_offset) * self.RATE):].shape[0] > 25 * self.RATE:
             duration = arr.shape[0] / self.RATE
-            #print(f"Clipping audio. Duration={duration} seconds, frames_offset={self.frames_offset}, timestamp_offset={self.timestamp_offset}")
             self.timestamp_offset = self.frames_offset + duration - 5
-            #print(f"Updated timestamp_offset after clipping: {self.timestamp_offset}")
 
     def get_audio_chunk_for_processing(self):
-        #print("ServeClientBase: get_audio_chunk_for_processing called")
-        # Get the audio chunk starting from the current offset for processing
         samples_take = max(0, (self.timestamp_offset - self.frames_offset) * self.RATE)
-        input_bytes = copy.copy(self.frames_np[int(samples_take):])
-        arr = np.frombuffer(input_bytes, dtype=np.uint8)
-        duration = arr.shape[0] / self.RATE
-        #print(f"Extracted audio chunk of {duration} seconds for processing")
+        print('before second cope-------',self.frames_np)
+        input_bytes = self.frames_np[int(samples_take):].copy()
+        duration = input_bytes.shape[0] / self.RATE
         return input_bytes, duration
 
     def prepare_segments(self, last_segment=None):
-        #print("ServeClientBase: prepare_segments called")
-        # Prepare the most recent transcription segments to send to the client
         segments = []
         if len(self.transcript) >= self.send_last_n_segments:
-            segments = copy.copy(self.transcript[-self.send_last_n_segments:])
+            segments = self.transcript[-self.send_last_n_segments:].copy()
         else:
-            segments = copy.copy(self.transcript)
+            segments = self.transcript.copy()
         if last_segment is not None:
             segments = segments + [last_segment]
-        #print(f"Prepared {len(segments)} segments for sending")
         return segments
 
     def get_audio_chunk_duration(self, input_bytes):
-        #print("ServeClientBase: get_audio_chunk_duration called")
-        # Calculate the duration of the audio chunk
-        arr = np.frombuffer(input_bytes, dtype=np.uint8)
-        duration = arr.shape[0] / self.RATE
         #print(f"Calculated duration of audio chunk: {duration} seconds")
+        return input_bytes.shape[0] / self.RATE
         return duration
 
     def send_transcription_to_client(self, segments):
-        #print("ServeClientBase: send_transcription_to_client called")
-        # Send transcription segments to the client via the websocket
         try:
             self.websocket.send(json.dumps({
                 "uid": self.client_uid,
                 "segments": segments,
             }))
-            #print(f"Successfully sent {len(segments)} segments to client {self.client_uid}")
         except Exception as e:
             pass
-            #logging.error(f"[ERROR]: Failed to send data to client {self.client_uid}: {e}")
-            #print(f"[ERROR]: Failed to send data to client {self.client_uid}: {e}")
 
     def disconnect(self):
-        #print("ServeClientBase: disconnect called")
-        # Notify client of disconnection and send the disconnect message
         try:
             self.websocket.send(json.dumps({
                 "uid": self.client_uid,
                 "message": self.DISCONNECT
             }))
-            #print(f"Client {self.client_uid} disconnected")
         except Exception as e:
             pass
-            #logging.error(f"[ERROR]: Failed to notify disconnection for client {self.client_uid}: {e}")
-            #print(f"[ERROR]: Failed to notify disconnection for client {self.client_uid}: {e}")
 
     def cleanup(self):
-        #print("ServeClientBase: cleanup called")
-        # Cleanup resources for the client
         pass
-        #logging.info(f"Cleaning up client {self.client_uid}")
         self.exit = True
-        #print(f"Cleanup completed for client {self.client_uid}")
 
 
 class ServeClientFasterWhisper(ServeClientBase):
@@ -504,7 +426,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         )
 
     def create_model(self, device):
-        #print("ServeClientFasterWhisper: create_model called")
         self.transcriber = WhisperModel(
             self.model_size_or_path,
             device=device,
@@ -513,7 +434,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         )
 
     def check_valid_model(self, model_size):
-        #print("ServeClientFasterWhisper: check_valid_model called")
         if model_size not in self.model_sizes:
             self.websocket.send(
                 json.dumps(
@@ -528,16 +448,12 @@ class ServeClientFasterWhisper(ServeClientBase):
         return model_size
 
     def set_language(self, info):
-        #print("ServeClientFasterWhisper: set_language called")
         if info.language_probability > 0.5:
             self.language = info.language
-            pass
-            #logging.info(f"Detected language {self.language} with probability {info.language_probability}")
             self.websocket.send(json.dumps(
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}))
 
     def transcribe_audio(self, input_sample):
-        # print("ServeClientFasterWhisper: transcribe_audio called")
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
         
@@ -559,38 +475,32 @@ class ServeClientFasterWhisper(ServeClientBase):
         return result
 
     def get_previous_output(self):
-        #print("ServeClientFasterWhisper: get_previous_output called")
         segments = []
         if self.t_start is None:
             self.t_start = time.time()
         if time.time() - self.t_start < self.show_prev_out_thresh:
             segments = self.prepare_segments()
 
-        # add a blank if there is no speech for 3 seconds
         if len(self.text) and self.text[-1] != '':
             if time.time() - self.t_start > self.add_pause_thresh:
                 self.text.append('')
         return segments
 
     def handle_transcription_output(self, result, duration):
-        #print("ServeClientFasterWhisper: handle_transcription_output called")
         segments = []
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
             segments = self.prepare_segments(last_segment)
         else:
-            # show previous output if there is pause i.e. no output from whisper
             segments = self.get_previous_output()
 
         if len(segments):
             self.send_transcription_to_client(segments)
 
     def speech_to_text(self):
-        #print("ServeClientFasterWhisper: speech_to_text called")
         while True:
             if self.exit:
-                #logging.info("Exiting speech to text thread")
                 break
 
             if self.frames_np is None:
@@ -627,12 +537,10 @@ class ServeClientFasterWhisper(ServeClientBase):
         }
 
     def update_segments(self, segments, duration):
-        #print("ServeClientFasterWhisper: update_segments called")
         offset = None
         self.current_out = ''
         last_segment = None
 
-        # process complete segments
         if len(segments) > 1:
             for i, s in enumerate(segments[:-1]):
                 text_ = s.text
@@ -647,7 +555,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.transcript.append(self.format_segment(start, end, text_))
                 offset = min(duration, s.end)
 
-        # only process the segments if it satisfies the no_speech_thresh
         if segments[-1].no_speech_prob <= self.no_speech_thresh:
             self.current_out += segments[-1].text
             last_segment = self.format_segment(
@@ -656,8 +563,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.current_out
             )
 
-        # if same incomplete segment is seen multiple times then update the offset
-        # and append the segment to the list
         if self.current_out.strip() == self.prev_out.strip() and self.current_out != '':
             self.same_output_threshold += 1
         else:
