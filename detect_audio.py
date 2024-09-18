@@ -2,7 +2,6 @@ import asyncio
 from whisper_live.client import TranscriptionClient
 
 async def transcribe_audio(client_id, audio_file, language):
-    print('start---------=======')
     client = TranscriptionClient(
         "localhost",
         9090,
@@ -20,14 +19,13 @@ async def transcribe_audio(client_id, audio_file, language):
     transcription = client(audio_file)  
 
     print(f"Client {client_id} transcription result: {transcription}")
-    print('end----===================')
     return transcription  # Ensure it returns the transcription
 
 async def main():
     audio_file = "media/my_voice_converted.wav"
-    audio_file2 = "media/second_short.wav"
+    audio_file2 = "media/az_voice_converted.wav"
 
-    my_list = [audio_file]
+    my_list = [audio_file,audio_file2]
 
     tasks = []
     count = 0
