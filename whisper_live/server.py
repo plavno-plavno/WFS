@@ -119,7 +119,7 @@ class ClientManager:
         elapsed_time = time.time() - self.start_times[websocket.socket_data_id]
         if elapsed_time >= self.max_connection_time:
             self.clients[websocket.socket_data_id].disconnect()
-            print(f"Client with uid '{self.clients[websocket.socket_data_id].client_uid}' disconnected due to overtime.")
+            logging.info(f"Client with uid '{self.clients[websocket.socket_data_id].client_uid}' disconnected due to overtime.")
             return True
         return False
 
@@ -155,7 +155,7 @@ class TranscriptionServer:
         
         if self.backend.is_faster_whisper():
             if faster_whisper_custom_model_path is not None and os.path.exists(faster_whisper_custom_model_path):
-                print(f"Using custom model {faster_whisper_custom_model_path}")
+                logging.info(f"Using custom model {faster_whisper_custom_model_path}")
                 options["model"] = faster_whisper_custom_model_path
             client = ServeClientFasterWhisper(
                 websocket,
@@ -168,7 +168,7 @@ class TranscriptionServer:
                 use_vad=self.use_vad,
                 single_model=self.single_model,
             )
-            print("Running faster_whisper backend.")
+            logging.info("Running faster_whisper backend.")
 
         if client is None:
             raise ValueError(f"Backend type {self.backend.value} not recognised or not handled.")
@@ -194,7 +194,7 @@ class TranscriptionServer:
 
     def handle_new_connection(self, websocket, faster_whisper_custom_model_path, msg):
         try:
-            print("New client connected")
+            logging.info("New client connected")
             options = msg # websocket.recv()
             options = json.loads(options)
             self.use_vad = options.get('use_vad')
@@ -205,13 +205,13 @@ class TranscriptionServer:
             self.initialize_client(websocket, options, faster_whisper_custom_model_path)
             return True
         except json.JSONDecodeError:
-            print("Failed to decode JSON from client")
+            logging.error("Failed to decode JSON from client")
             return False
         except ConnectionClosed:
-            print("Connection closed by client")
+            logging.error("Connection closed by client")
             return False
         except Exception as e:
-            print(f"Error during new connection initialization: {str(e)}")
+            logging.error(f"Error during new connection initialization: {str(e)}")
             return False
 
     def process_audio_frames(self, websocket, msg):
@@ -261,9 +261,9 @@ class TranscriptionServer:
                 if not self.process_audio_frames(websocket):
                     break
         except ConnectionClosed:
-            print("Connection closed by client")
+            logging.info("Connection closed by client")
         except Exception as e:
-            print(f"Unexpected error: {str(e)}")
+            logging.error(f"Unexpected error: {str(e)}")
         finally:
             if self.client_manager.get_client(websocket):
                 self.cleanup(websocket)
@@ -275,35 +275,48 @@ class TranscriptionServer:
             port=9090,
             backend="tensorrt",
             faster_whisper_custom_model_path=None,
-            single_model=False):
+            single_model=False,
+            ssl_cert_file=None,
+            ssl_key_file=None,
+            ssl_passphrase=None):
         """
-        Run the transcription server.
+        Run the transcription server with optional SSL support.
 
         Args:
             host (str): The host address to bind the server.
             port (int): The port number to bind the server.
+            ssl_cert_file (str): Path to the SSL certificate file.
+            ssl_key_file (str): Path to the SSL key file.
+            ssl_passphrase (str): Optional passphrase for the SSL key.
         """
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
+        
         if single_model:
             if faster_whisper_custom_model_path:
-                print("Custom model option was provided. Switching to single model mode.")
+                logging.info("Custom model option was provided. Switching to single model mode.")
                 self.single_model = True
-                # TODO: load model initially
             else:
-                print("Single model mode currently only works with custom models.")
+                logging.info("Single model mode currently only works with custom models.")
+        
         if not BackendType.is_valid(backend):
             raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
 
+        # Create SSL options if cert and key are provided
+        ssl_options = None
+        if ssl_cert_file and ssl_key_file:
+            ssl_options = {
+                "key_file_name": ssl_key_file,
+                "cert_file_name": ssl_cert_file,
+                "passphrase": ssl_passphrase
+            }
 
-        app = App()
+        app = App(ssl_options) if ssl_options else App()
 
         def on_open(ws: WebSocket):
-            print("Новое WebSocket подключение")
-            
+            logging.info("New websocket connection")
 
         def on_message(ws: WebSocket, msg, opcode):
-            print(f"Получено сообщение:", opcode)
             if OpCode.TEXT == opcode:
                 self.backend = BackendType(backend)
                 if not self.handle_new_connection(ws, faster_whisper_custom_model_path, msg):
@@ -315,31 +328,50 @@ class TranscriptionServer:
                         if not self.process_audio_frames(ws, msg):
                             pass
                 except Exception as e:
-                    print(f"Ошибка при обработке аудио: {str(e)}")
+                    logging.error(f'Error processing audio: {str(e)}')
 
         def on_close(ws: WebSocket, code, reason):
-            print(f"Соединение закрыто: {code}, причина: {reason}")
+            logging.info(f'Connection closed: {code}, reason: {reason}')
             if self.client_manager.get_client(ws):
                 self.cleanup(ws)
 
-        # app.ws("/*", AudioServerBehavior(self))
-        app.ws("/*", {
-            "open": on_open,
-            "message": on_message,  # Handle incoming messages
-            "close": on_close       # Handle WebSocket close event
-        })
+        async def ws_upgrade(res, req, socket_context):
+            
+            key = req.get_header("sec-websocket-key")
+            protocol = req.get_header("sec-websocket-protocol")
 
+            extensions = req.get_header("sec-websocket-extensions")
+            token = req.get_query("token")
+            if key is None:
+                return res.write_status(403).end("Missing token")
+
+            if key is None:
+                return res.write_status(400).end("Missing WebSocket key")
+
+            try:
+                res.upgrade(key, protocol, extensions, socket_context)
+            except Exception as e:
+                return res.write_status(500).end("Upgrade failed")
+
+        app.ws(
+            "/*",
+            {
+                "upgrade": ws_upgrade,
+                "open": on_open,
+                "message": on_message,
+                "close": on_close
+            },
+        )
+
+        # app.ws("/*", {
+        #     "open": on_open,
+        #     "message": on_message,
+        #     "close": on_close
+        # })
         app.listen(port)
+        logging.info(f'App is listening on port {port}')
+
         app.run()
-        # with serve(
-        #     functools.partial(
-        #         self.recv_audio,
-        #         backend=BackendType(backend),
-        #         faster_whisper_custom_model_path=faster_whisper_custom_model_path),
-        #     host,
-        #     port
-        # ) as server:
-        #     server.serve_forever()
 
     def voice_activity(self, websocket, frame_np):
         """
@@ -536,7 +568,7 @@ class ServeClientBase(object):
                 OpCode.TEXT
             )
         except Exception as e:
-            print(f"[ERROR]: Sending data to client: {e}")
+            logging.error(f'[ERROR]: Sending data to client: {e}')
 
     def disconnect(self):
         """
@@ -561,7 +593,7 @@ class ServeClientBase(object):
         associated with the transcription process.
 
         """
-        print("Cleaning up.")
+        logging.info('Cleaning up.')
         self.exit = True
 
 
@@ -612,7 +644,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         if self.model_size_or_path is None:
             return
-        print(f"Using Device={device} with precision {self.compute_type}")
+        logging.info(f'Using Device={device} with precision {self.compute_type}')
 
         if single_model:
             if ServeClientFasterWhisper.SINGLE_MODEL is None:
@@ -686,7 +718,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         if info.language_probability > 0.5:
             self.language = info.language
-            print(f"Detected language {self.language} with probability {info.language_probability}")
+            logging.info(f'Detected language {self.language} with probability {info.language_probability}')
             self.websocket.send(json.dumps(
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}),
                 OpCode.TEXT)
@@ -789,7 +821,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         while True:
             if self.exit:
-                print("Exiting speech to text thread")
+                logging.info('Exiting speech to text thread')
                 break
 
             if self.frames_np is None:
@@ -812,7 +844,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.handle_transcription_output(result, duration)
 
             except Exception as e:
-                print(f"[ERROR]: Failed to transcribe audio chunk: {e}")
+                logging.error(f"Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
     def format_segment(self, start, end, text):
