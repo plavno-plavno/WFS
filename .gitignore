@@ -88,4 +88,4 @@ instance/
 
 # Static and media files
 staticfiles/
-media/
+
