@@ -682,7 +682,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}),
                 OpCode.TEXT)
 
-    def transcribe_audio_in_multiple_languages(self, input_sample):
+    def transcribe_audio(self, input_sample):
         """
         Transcribes the provided audio sample in multiple languages.
 
