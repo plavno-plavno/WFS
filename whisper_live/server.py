@@ -682,37 +682,48 @@ class ServeClientFasterWhisper(ServeClientBase):
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}),
                 OpCode.TEXT)
 
-    def transcribe_audio(self, input_sample):
-        """
-        Transcribes the provided audio sample using the configured transcriber instance.
+def transcribe_audio_in_multiple_languages(self, input_sample):
+    """
+    Transcribes the provided audio sample in multiple languages.
 
-        If the language has not been set, it updates the session's language based on the transcription
-        information.
+    Args:
+        input_sample (np.array): The audio chunk to be transcribed. This should be a NumPy
+                                array representing the audio data.
 
-        Args:
-            input_sample (np.array): The audio chunk to be transcribed. This should be a NumPy
-                                    array representing the audio data.
+    Returns:
+        A dictionary where the keys are languages and the values are the corresponding transcription results.
+    """
+    languages = ['ru', 'es', 'fr']  # Replace with the actual language codes you want to use, e.g., 'en' for English, 'es' for Spanish, 'fr' for French
+    transcriptions = {}
 
-        Returns:
-            The transcription result from the transcriber. The exact format of this result
-            depends on the implementation of the `transcriber.transcribe` method but typically
-            includes the transcribed text.
-        """
+    for lang in languages:
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
+            
+        # Set the language for the current transcription loop
+        self.language = lang
+        
+        # Transcribe the audio in the current language
         result, info = self.transcriber.transcribe(
             input_sample,
             initial_prompt=self.initial_prompt,
             language=self.language,
             task=self.task,
             vad_filter=self.use_vad,
-            vad_parameters=self.vad_parameters if self.use_vad else None)
+            vad_parameters=self.vad_parameters if self.use_vad else None
+        )
+
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
+        # Store the result in the dictionary with the language as the key
+        transcriptions[lang] = result
+
+        # If the language was not set, update it based on transcription info (optional)
         if self.language is None and info is not None:
             self.set_language(info)
-        return result
+    
+    return transcriptions
 
     def get_previous_output(self):
         """
