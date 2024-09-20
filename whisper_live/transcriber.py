@@ -291,7 +291,10 @@ class WhisperModel:
             - an instance of TranscriptionInfo
         """
         sampling_rate = self.feature_extractor.sampling_rate
+        audio = np.frombuffer(audio, dtype=np.int16)
 
+        # If you need floats between -1 and 1, you can normalize:
+        audio = audio / np.max(np.abs(audio))
         if not isinstance(audio, np.ndarray):
             audio = decode_audio(audio, sampling_rate=sampling_rate)
 

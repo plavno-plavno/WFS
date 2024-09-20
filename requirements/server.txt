@@ -10,4 +10,5 @@ ffmpeg-python==0.2.0
 scipy==1.11.2
 jiwer==3.0.1
 evaluate==0.4.0
+socketify==0.0.28
 numpy<2  
