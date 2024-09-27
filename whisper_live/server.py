@@ -1,21 +1,17 @@
-import os
-import time
-import threading
 import json
-import functools
 import logging
+import os
+import threading
+import time
 from enum import Enum
 from typing import List, Optional
 
-import torch
 import numpy as np
-from websockets.sync.server import serve
-from websockets.exceptions import ConnectionClosed
-from whisper_live.vad import VoiceActivityDetector
-from whisper_live.transcriber import WhisperModel
-
+import torch
 from socketify import App, WebSocket, OpCode
+from websockets.exceptions import ConnectionClosed
 
+from whisper_live.transcriber import WhisperModel
 
 logging.basicConfig(level=logging.INFO)
 
