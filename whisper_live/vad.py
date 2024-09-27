@@ -9,7 +9,7 @@ import onnxruntime
 
 class VoiceActivityDetection():
 
-    def __init__(self, force_onnx_cpu=True):
+    def __init__(self, force_onnx_cpu=False):
         path = self.download()
 
         opts = onnxruntime.SessionOptions()
@@ -94,10 +94,9 @@ class VoiceActivityDetection():
         return stacked.cpu()
 
     @staticmethod
-    @staticmethod
     def download(model_url="https://github.com/snakers4/silero-vad/raw/v5.0/files/silero_vad.onnx"):
         target_dir = os.path.expanduser("~/.cache/whisper-live/")
-
+        print(target_dir);
         os.makedirs(target_dir, exist_ok=True)
 
         model_filename = os.path.join(target_dir, "silero_vad.onnx")

@@ -12,6 +12,7 @@ from socketify import App, WebSocket, OpCode
 from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
+#from faster_whisper.transcribe import WhisperModel
 
 logging.basicConfig(level=logging.INFO)
 
@@ -352,7 +353,7 @@ class TranscriptionServer:
         app.ws(
             "/*",
             {
-                "upgrade": ws_upgrade,
+              #  "upgrade": ws_upgrade,
                 "open": on_open,
                 "message": on_message,
                 "close": on_close
