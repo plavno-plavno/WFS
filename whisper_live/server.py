@@ -14,7 +14,7 @@ from websockets.exceptions import ConnectionClosed
 from whisper_live.transcriber import WhisperModel
 #from faster_whisper.transcribe import WhisperModel
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class ClientManager:
