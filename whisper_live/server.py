@@ -11,8 +11,9 @@ import torch
 from socketify import App, WebSocket, OpCode
 from websockets.exceptions import ConnectionClosed
 
-from whisper_live.transcriber import WhisperModel
+#from whisper_live.transcriber import WhisperModel
 #from faster_whisper.transcribe import WhisperModel
+from whisper_live.transcriber2 import WhisperModel
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -743,6 +744,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             initial_prompt=self.initial_prompt,
             language=self.language,
             task=self.task,
+            multilingual=True,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
         if ServeClientFasterWhisper.SINGLE_MODEL:
@@ -791,6 +793,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
+            print(last_segment)
             segments = self.prepare_segments(last_segment)
         else:
             # show previous output if there is pause i.e. no output from whisper
@@ -833,7 +836,6 @@ class ServeClientFasterWhisper(ServeClientBase):
             try:
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
-
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
                     time.sleep(0.25)    # wait for voice activity, result is None when no voice activity
@@ -888,7 +890,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         offset = None
         self.current_out = ''
         last_segment = None
-
         # process complete segments
         if len(segments) > 1:
             for i, s in enumerate(segments[:-1]):
