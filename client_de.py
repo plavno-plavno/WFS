@@ -3,7 +3,7 @@ from whisper_live.client import TranscriptionClient
 client = TranscriptionClient(
     "127.0.0.1",
     9090,
-    lang="en",
+    lang="de",
     translate=False,
     model="large-v3",
     use_vad=True,

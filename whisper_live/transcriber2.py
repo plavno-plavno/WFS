@@ -118,7 +118,7 @@ class BatchedInferencePipeline:
         use_vad_model: bool = True,
         options: Optional[NamedTuple] = None,
         tokenizer=None,
-        chunk_length: int = 30,
+        chunk_length: int = 4,
         vad_device: Union[int, str, "torch.device"] = "auto",
         vad_onset: float = 0.500,
         vad_offset: float = 0.363,
@@ -831,7 +831,6 @@ class WhisperModel:
         """
 
         sampling_rate = self.feature_extractor.sampling_rate
-        print(sampling_rate);
         if isinstance(audio, np.ndarray):
             audio = torch.from_numpy(audio)
         elif not isinstance(audio, torch.Tensor):
@@ -1012,7 +1011,6 @@ class WhisperModel:
         )
 
         segments = self.generate_segments(features, tokenizer, options, encoder_output)
-        print(segments)
         if speech_chunks:
             segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)
 

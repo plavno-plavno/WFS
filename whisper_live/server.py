@@ -11,11 +11,11 @@ import torch
 from socketify import App, WebSocket, OpCode
 from websockets.exceptions import ConnectionClosed
 
-#from whisper_live.transcriber import WhisperModel
+from whisper_live.transcriber import WhisperModel
 #from faster_whisper.transcribe import WhisperModel
-from whisper_live.transcriber2 import WhisperModel
+#from whisper_live.transcriber2 import WhisperModel
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 class ClientManager:
@@ -143,7 +143,6 @@ class TranscriptionServer:
 
     def __init__(self):
         self.client_manager = ClientManager()
-        self.no_voice_activity_chunks = 0
         self.use_vad = True
         self.single_model = False
 
@@ -370,36 +369,6 @@ class TranscriptionServer:
         logging.info(f'App is listening on port {port}')
 
         app.run()
-
-    def voice_activity(self, websocket, frame_np):
-        """
-        Evaluates the voice activity in a given audio frame and manages the state of voice activity detection.
-
-        This method uses the configured voice activity detection (VAD) model to assess whether the given audio frame
-        contains speech. If the VAD model detects no voice activity for more than three consecutive frames,
-        it sets an end-of-speech (EOS) flag for the associated client. This method aims to efficiently manage
-        speech detection to improve subsequent processing steps.
-
-        Args:
-            websocket: The websocket associated with the current client. Used to retrieve the client object
-                    from the client manager for state management.
-            frame_np (numpy.ndarray): The audio frame to be analyzed. This should be a NumPy array containing
-                                    the audio data for the current frame.
-
-        Returns:
-            bool: True if voice activity is detected in the current frame, False otherwise. When returning False
-                after detecting no voice activity for more than three consecutive frames, it also triggers the
-                end-of-speech (EOS) flag for the client.
-        """
-        if not self.vad_detector(frame_np):
-            self.no_voice_activity_chunks += 1
-            if self.no_voice_activity_chunks > 3:
-                client = self.client_manager.get_client(websocket)
-                if not client.eos:
-                    client.set_eos(True)
-                time.sleep(0.1)    # Sleep 100m; wait some voice activity.
-            return False
-        return True
 
     def cleanup(self, websocket):
         """
@@ -744,7 +713,6 @@ class ServeClientFasterWhisper(ServeClientBase):
             initial_prompt=self.initial_prompt,
             language=self.language,
             task=self.task,
-            multilingual=True,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
         if ServeClientFasterWhisper.SINGLE_MODEL:

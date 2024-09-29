@@ -17,7 +17,7 @@ from faster_whisper.audio import decode_audio, pad_or_trim
 from faster_whisper.feature_extractor import FeatureExtractor
 from faster_whisper.tokenizer import _LANGUAGE_CODES, Tokenizer
 from faster_whisper.utils import download_model, format_timestamp, get_end, get_logger
-from faster_whisper.vad import (
+from whisper_live.vad2 import (
     SpeechTimestampsMap,
     VadOptions,
     collect_chunks,
@@ -205,7 +205,7 @@ class WhisperModel:
         audio: Union[str, BinaryIO, np.ndarray],
         language: Optional[str] = None,
         task: str = "transcribe",
-        beam_size: int = 4,
+        beam_size: int = 3,
         best_of: int = 4,
         patience: float = 1,
         length_penalty: float = 1,
