@@ -523,8 +523,7 @@ class WhisperModel:
                 prefix=options.prefix if seek == 0 else None,
                 hotwords=options.hotwords,
             )
-            print('PROMT');
-            print(prompt);
+
 
 
             if seek > 0 or encoder_output is None:
@@ -758,10 +757,8 @@ class WhisperModel:
                     "patience": options.patience,
                 }
             start_time = time.time()  # Start the ti
-            print('encoder_output:');
-            print(encoder_output);
-            print('promt_again:');
-            print(prompt);
+
+
 
             result = self.model.generate(
                 encoder_output,
@@ -777,18 +774,45 @@ class WhisperModel:
                 max_initial_timestamp_index=max_initial_timestamp_index,
                 **kwargs,
             )[0]
+
+            prompt2 = [50258, 50269,50274, 50360]
+
+            result2 = self.model.generate(
+                encoder_output,
+                [prompt2],
+                length_penalty=options.length_penalty,
+                repetition_penalty=options.repetition_penalty,
+                no_repeat_ngram_size=options.no_repeat_ngram_size,
+                max_length=max_length,
+                return_scores=True,
+                return_no_speech_prob=True,
+                suppress_blank=options.suppress_blank,
+                suppress_tokens=options.suppress_tokens,
+                max_initial_timestamp_index=max_initial_timestamp_index,
+                **kwargs,
+            )[0]
+
             end_time = time.time()  # End the timer
             execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
             print(f"GENERATION time: {execution_time:.2f} ms")  # Print the execution time
             tokens = result.sequences_ids[0]
-            print('TOKENS:');
-            print(tokens);
+            tokens2 = result2.sequences_ids[0]
             # Recover the average log prob from the returned score.
             seq_len = len(tokens)
             cum_logprob = result.scores[0] * (seq_len**options.length_penalty)
             avg_logprob = cum_logprob / (seq_len + 1)
 
             text = tokenizer.decode(tokens).strip()
+
+            text2= tokenizer.decode(tokens2).strip()
+
+            print()
+            print()
+            print('DE')
+            print(text)
+            print('EN')
+            print(text2)
+
             compression_ratio = get_compression_ratio(text)
 
             decode_result = (
