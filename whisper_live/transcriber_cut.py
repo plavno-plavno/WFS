@@ -367,82 +367,15 @@ class WhisperModel:
 
         encoder_output = None
         all_language_probs = None
-        if language is None:
-            if not self.model.is_multilingual:
-                language = "en"
-                language_probability = 1
-            else:
-                if (
-                    language_detection_segments is None
-                    or language_detection_segments < 1
-                ):
-                    language_detection_segments = 1
-                start_timestamp = (
-                    float(clip_timestamps.split(",")[0])
-                    if isinstance(clip_timestamps, str)
-                    else clip_timestamps[0]
-                )
-                content_frames = (
-                    features.shape[-1] - self.feature_extractor.nb_max_frames
-                )
-                seek = (
-                    int(start_timestamp * self.frames_per_second)
-                    if start_timestamp * self.frames_per_second < content_frames
-                    else 0
-                )
-                end_frames = min(
-                    seek
-                    + self.feature_extractor.nb_max_frames
-                    * language_detection_segments,
-                    content_frames,
-                )
-                detected_language_info = {}
-                while seek < end_frames:
-                    segment = features[
-                        :, seek : seek + self.feature_extractor.nb_max_frames
-                    ]
-                    encoder_output = self.encode(segment)
-                    # results is a list of tuple[str, float] with language names and
-                    # probabilities.
-                    results = self.model.detect_language(encoder_output)[0]
-                    # Parse language names to strip out markers
-                    all_language_probs = [
-                        (token[2:-2], prob) for (token, prob) in results
-                    ]
-                    # Get top language token and probability
-                    language, language_probability = all_language_probs[0]
-                    if (
-                        language_detection_threshold is None
-                        or language_probability > language_detection_threshold
-                    ):
-                        break
-                    detected_language_info.setdefault(language, []).append(
-                        language_probability
-                    )
-                    seek += segment.shape[-1]
-                else:
-                    # If no language detected for all segments, the majority vote of the highest
-                    # projected languages for all segments is used to determine the language.
-                    language = max(
-                        detected_language_info,
-                        key=lambda lang: len(detected_language_info[lang]),
-                    )
-                    language_probability = max(detected_language_info[language])
 
-                self.logger.info(
-                    "Detected language '%s' with probability %.2f",
-                    language,
-                    language_probability,
-                )
-        else:
-            if not self.model.is_multilingual and language != "en":
-                self.logger.warning(
-                    "The current model is English-only but the language parameter is set to '%s'; "
-                    "using 'en' instead." % language
-                )
-                language = "en"
+        if not self.model.is_multilingual and language != "en":
+            self.logger.warning(
+                "The current model is English-only but the language parameter is set to '%s'; "
+                "using 'en' instead." % language
+            )
+            language = "en"
 
-            language_probability = 1
+        language_probability = 1
 
         tokenizer = Tokenizer(
             self.hf_tokenizer,
@@ -590,6 +523,9 @@ class WhisperModel:
                 prefix=options.prefix if seek == 0 else None,
                 hotwords=options.hotwords,
             )
+            print('PROMT');
+            print(prompt);
+
 
             if seek > 0 or encoder_output is None:
                 encoder_output = self.encode(segment)
@@ -726,74 +662,6 @@ class WhisperModel:
 
                 seek += segment_size
 
-            if options.word_timestamps:
-                self.add_word_timestamps(
-                    current_segments,
-                    tokenizer,
-                    encoder_output,
-                    segment_size,
-                    options.prepend_punctuations,
-                    options.append_punctuations,
-                    last_speech_timestamp=last_speech_timestamp,
-                )
-
-                if not single_timestamp_ending:
-                    last_word_end = get_end(current_segments)
-                    if last_word_end is not None and last_word_end > time_offset:
-                        seek = round(last_word_end * self.frames_per_second)
-
-                # skip silence before possible hallucinations
-                if options.hallucination_silence_threshold is not None:
-                    threshold = options.hallucination_silence_threshold
-
-                    # if first segment might be a hallucination, skip leading silence
-                    first_segment = next_words_segment(current_segments)
-                    if first_segment is not None and is_segment_anomaly(first_segment):
-                        gap = first_segment["start"] - time_offset
-                        if gap > threshold:
-                            seek = previous_seek + round(gap * self.frames_per_second)
-                            continue
-
-                    # skip silence before any possible hallucination that is surrounded
-                    # by silence or more hallucinations
-                    hal_last_end = last_speech_timestamp
-                    for si in range(len(current_segments)):
-                        segment = current_segments[si]
-                        if not segment["words"]:
-                            continue
-                        if is_segment_anomaly(segment):
-                            next_segment = next_words_segment(
-                                current_segments[si + 1:]
-                            )
-                            if next_segment is not None:
-                                hal_next_start = next_segment["words"][0]["start"]
-                            else:
-                                hal_next_start = time_offset + segment_duration
-                            silence_before = (
-                                segment["start"] - hal_last_end > threshold
-                                or segment["start"] < threshold
-                                or segment["start"] - time_offset < 2.0
-                            )
-                            silence_after = (
-                                hal_next_start - segment["end"] > threshold
-                                or is_segment_anomaly(next_segment)
-                                or window_end_time - segment["end"] < 2.0
-                            )
-                            if silence_before and silence_after:
-                                seek = round(
-                                    max(time_offset + 1, segment["start"])
-                                    * self.frames_per_second
-                                )
-                                if content_duration - segment["end"] < threshold:
-                                    seek = content_frames
-                                current_segments[si:] = []
-                                break
-                        hal_last_end = segment["end"]
-
-                last_word_end = get_end(current_segments)
-                if last_word_end is not None:
-                    last_speech_timestamp = last_word_end
-
             for segment in current_segments:
                 tokens = segment["tokens"]
                 text = tokenizer.decode(tokens)
@@ -890,6 +758,11 @@ class WhisperModel:
                     "patience": options.patience,
                 }
             start_time = time.time()  # Start the ti
+            print('encoder_output:');
+            print(encoder_output);
+            print('promt_again:');
+            print(prompt);
+
             result = self.model.generate(
                 encoder_output,
                 [prompt],
@@ -908,7 +781,8 @@ class WhisperModel:
             execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
             print(f"GENERATION time: {execution_time:.2f} ms")  # Print the execution time
             tokens = result.sequences_ids[0]
-
+            print('TOKENS:');
+            print(tokens);
             # Recover the average log prob from the returned score.
             seq_len = len(tokens)
             cum_logprob = result.scores[0] * (seq_len**options.length_penalty)
@@ -1012,183 +886,6 @@ class WhisperModel:
             prompt.extend(prefix_tokens)
 
         return prompt
-
-    def add_word_timestamps(
-        self,
-        segments: List[dict],
-        tokenizer: Tokenizer,
-        encoder_output: ctranslate2.StorageView,
-        num_frames: int,
-        prepend_punctuations: str,
-        append_punctuations: str,
-        last_speech_timestamp: float,
-    ) -> None:
-        if len(segments) == 0:
-            return
-
-        text_tokens_per_segment = [
-            [token for token in segment["tokens"] if token < tokenizer.eot]
-            for segment in segments
-        ]
-
-        text_tokens = list(itertools.chain.from_iterable(text_tokens_per_segment))
-        alignment = self.find_alignment(
-            tokenizer, text_tokens, encoder_output, num_frames
-        )
-        word_durations = np.array([word["end"] - word["start"] for word in alignment])
-        word_durations = word_durations[word_durations.nonzero()]
-        median_duration = np.median(word_durations) if len(word_durations) > 0 else 0.0
-        median_duration = min(0.7, float(median_duration))
-        max_duration = median_duration * 2
-
-        # hack: truncate long words at sentence boundaries.
-        # a better segmentation algorithm based on VAD should be able to replace this.
-        if len(word_durations) > 0:
-            sentence_end_marks = ".。!！?？"
-            # ensure words at sentence boundaries
-            # are not longer than twice the median word duration.
-            for i in range(1, len(alignment)):
-                if alignment[i]["end"] - alignment[i]["start"] > max_duration:
-                    if alignment[i]["word"] in sentence_end_marks:
-                        alignment[i]["end"] = alignment[i]["start"] + max_duration
-                    elif alignment[i - 1]["word"] in sentence_end_marks:
-                        alignment[i]["start"] = alignment[i]["end"] - max_duration
-
-        merge_punctuations(alignment, prepend_punctuations, append_punctuations)
-
-        time_offset = (
-            segments[0]["seek"]
-            * self.feature_extractor.hop_length
-            / self.feature_extractor.sampling_rate
-        )
-
-        word_index = 0
-
-        for segment, text_tokens in zip(segments, text_tokens_per_segment):
-            saved_tokens = 0
-            words = []
-
-            while word_index < len(alignment) and saved_tokens < len(text_tokens):
-                timing = alignment[word_index]
-
-                if timing["word"]:
-                    words.append(
-                        dict(
-                            word=timing["word"],
-                            start=round(time_offset + timing["start"], 2),
-                            end=round(time_offset + timing["end"], 2),
-                            probability=timing["probability"],
-                        )
-                    )
-
-                saved_tokens += len(timing["tokens"])
-                word_index += 1
-
-            # hack: truncate long words at segment boundaries.
-            # a better segmentation algorithm based on VAD should be able to replace this.
-            if len(words) > 0:
-                # ensure the first and second word after a pause is not longer than
-                # twice the median word duration.
-                if words[0]["end"] - last_speech_timestamp > median_duration * 4 and (
-                    words[0]["end"] - words[0]["start"] > max_duration
-                    or (
-                        len(words) > 1
-                        and words[1]["end"] - words[0]["start"] > max_duration * 2
-                    )
-                ):
-                    if (
-                        len(words) > 1
-                        and words[1]["end"] - words[1]["start"] > max_duration
-                    ):
-                        boundary = max(
-                            words[1]["end"] / 2, words[1]["end"] - max_duration
-                        )
-                        words[0]["end"] = words[1]["start"] = boundary
-                    words[0]["start"] = max(0, words[0]["end"] - max_duration)
-
-                # prefer the segment-level start timestamp if the first word is too long.
-                if (
-                    segment["start"] < words[0]["end"]
-                    and segment["start"] - 0.5 > words[0]["start"]
-                ):
-                    words[0]["start"] = max(
-                        0, min(words[0]["end"] - median_duration, segment["start"])
-                    )
-                else:
-                    segment["start"] = words[0]["start"]
-
-                # prefer the segment-level end timestamp if the last word is too long.
-                if (
-                    segment["end"] > words[-1]["start"]
-                    and segment["end"] + 0.5 < words[-1]["end"]
-                ):
-                    words[-1]["end"] = max(
-                        words[-1]["start"] + median_duration, segment["end"]
-                    )
-                else:
-                    segment["end"] = words[-1]["end"]
-
-                last_speech_timestamp = segment["end"]
-
-            segment["words"] = words
-
-    def find_alignment(
-        self,
-        tokenizer: Tokenizer,
-        text_tokens: List[int],
-        encoder_output: ctranslate2.StorageView,
-        num_frames: int,
-        median_filter_width: int = 7,
-    ) -> List[dict]:
-        if len(text_tokens) == 0:
-            return []
-
-        result = self.model.align(
-            encoder_output,
-            tokenizer.sot_sequence,
-            [text_tokens],
-            num_frames,
-            median_filter_width=median_filter_width,
-        )[0]
-
-        text_token_probs = result.text_token_probs
-
-        alignments = result.alignments
-        text_indices = np.array([pair[0] for pair in alignments])
-        time_indices = np.array([pair[1] for pair in alignments])
-
-        words, word_tokens = tokenizer.split_to_word_tokens(
-            text_tokens + [tokenizer.eot]
-        )
-        if len(word_tokens) <= 1:
-            # return on eot only
-            # >>> np.pad([], (1, 0))
-            # array([0.])
-            # This results in crashes when we lookup jump_times with float, like
-            # IndexError: arrays used as indices must be of integer (or boolean) type
-            return []
-        word_boundaries = np.pad(np.cumsum([len(t) for t in word_tokens[:-1]]), (1, 0))
-        if len(word_boundaries) <= 1:
-            return []
-
-        jumps = np.pad(np.diff(text_indices), (1, 0), constant_values=1).astype(bool)
-        jump_times = time_indices[jumps] / self.tokens_per_second
-        start_times = jump_times[word_boundaries[:-1]]
-        end_times = jump_times[word_boundaries[1:]]
-        word_probabilities = [
-            np.mean(text_token_probs[i:j])
-            for i, j in zip(word_boundaries[:-1], word_boundaries[1:])
-        ]
-
-        return [
-            dict(
-                word=word, tokens=tokens, start=start, end=end, probability=probability
-            )
-            for word, tokens, start, end, probability in zip(
-                words, word_tokens, start_times, end_times, word_probabilities
-            )
-        ]
-
 
 def restore_speech_timestamps(
     segments: Iterable[Segment],

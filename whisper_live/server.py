@@ -11,9 +11,10 @@ import torch
 from socketify import App, WebSocket, OpCode
 from websockets.exceptions import ConnectionClosed
 
-from whisper_live.transcriber import WhisperModel
+#from whisper_live.transcriber import WhisperModel
 #from faster_whisper.transcribe import WhisperModel
 #from whisper_live.transcriber2 import WhisperModel
+from whisper_live.transcriber_cut import WhisperModel
 
 logging.basicConfig(level=logging.CRITICAL)
 
@@ -691,7 +692,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}),
                 OpCode.TEXT)
 
-    import time
 
     def transcribe_audio(self, input_sample):
         """
