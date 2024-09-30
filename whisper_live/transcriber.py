@@ -206,7 +206,7 @@ class WhisperModel:
         language: Optional[str] = None,
         task: str = "transcribe",
         beam_size: int = 3,
-        best_of: int = 4,
+        best_of: int = 3,
         patience: float = 1,
         length_penalty: float = 1,
         repetition_penalty: float = 1,
@@ -366,7 +366,6 @@ class WhisperModel:
 
         encoder_output = None
         all_language_probs = None
-
         if language is None:
             if not self.model.is_multilingual:
                 language = "en"
@@ -905,6 +904,7 @@ class WhisperModel:
                 **kwargs,
             )[0]
 
+            print(result)
             tokens = result.sequences_ids[0]
 
             # Recover the average log prob from the returned score.

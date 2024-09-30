@@ -588,6 +588,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket)
+        self.execution_times=[]
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -690,24 +691,24 @@ class ServeClientFasterWhisper(ServeClientBase):
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}),
                 OpCode.TEXT)
 
+    import time
+
     def transcribe_audio(self, input_sample):
         """
         Transcribes the provided audio sample using the configured transcriber instance.
-
-        If the language has not been set, it updates the session's language based on the transcription
-        information.
-
-        Args:
-            input_sample (np.array): The audio chunk to be transcribed. This should be a NumPy
-                                    array representing the audio data.
+        ...
 
         Returns:
-            The transcription result from the transcriber. The exact format of this result
-            depends on the implementation of the `transcriber.transcribe` method but typically
-            includes the transcribed text.
+            The transcription result from the transcriber.
         """
+        # Print the size of the input_sample
+        print(f"Input sample size: {input_sample.size} elements")
+
+        start_time = time.time()  # Start the timer
+
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
+
         result, info = self.transcriber.transcribe(
             input_sample,
             initial_prompt=self.initial_prompt,
@@ -715,13 +716,21 @@ class ServeClientFasterWhisper(ServeClientBase):
             task=self.task,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
+
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
         if self.language is None and info is not None:
             self.set_language(info)
-        return result
 
+        end_time = time.time()  # End the timer
+        execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
+        self.execution_times.append(execution_time)  # Store the execution time
+        avg_execution_time = sum(self.execution_times) / len(self.execution_times)  # Calculate average
+        print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
+        print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
+
+        return result
     def get_previous_output(self):
         """
         Retrieves previously generated transcription outputs if no new transcription is available
