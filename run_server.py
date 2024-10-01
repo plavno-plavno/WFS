@@ -1,9 +1,9 @@
 import argparse
 import os
+from whisper_live.translator import DEF_LANGS
 
 
 if __name__ == "__main__":
-    from whisper_live.server import DEF_LANGS
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', '-p',
                         type=int,
@@ -24,6 +24,9 @@ if __name__ == "__main__":
                         nargs='+',
                         default=DEF_LANGS,
                         help='List of languages to support (e.g., ["en", "ar"]).')
+    parser.add_argument('--transit_translation', '-tt',
+                        action='store_true',
+                        help='Enable transit translation.')
 
     args = parser.parse_args()
 
@@ -36,5 +39,6 @@ if __name__ == "__main__":
         backend=args.backend,
         faster_whisper_custom_model_path=args.faster_whisper_custom_model_path,
         single_model=not args.no_single_model,
-        langs=args.langs
+        langs=args.langs,
+        transit_translation=args.transit_translation
     )

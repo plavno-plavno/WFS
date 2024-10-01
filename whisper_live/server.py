@@ -13,11 +13,14 @@ from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
-# from faster_whisper.transcribe import WhisperModel
+from whisper_live.translator import DEF_LANGS, MultiLingualTranslatorLive
+
+from whisper_live.translator import MultiLingualTranslatorLive
+from transformers import AutoTokenizer
 
 
 logging.basicConfig(level=logging.INFO)
-DEF_LANGS = ["en", "ar"]
+
 
 
 class ClientManager:
@@ -180,6 +183,8 @@ class TranscriptionServer:
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
                 single_model=self.single_model,
+                langs=self.langs,
+                transit_translation=self.transit_translation
             )
             logging.info("Running faster_whisper backend.")
 
@@ -294,7 +299,9 @@ class TranscriptionServer:
             backend="tensorrt",
             faster_whisper_custom_model_path=None,
             single_model=False,
-            langs=DEF_LANGS
+            langs=DEF_LANGS,
+            transit_translation=None
+
     ):
         """
         Run the transcription server.
@@ -303,6 +310,9 @@ class TranscriptionServer:
             host (str): The host address to bind the server.
             port (int): The port number to bind the server.
         """
+
+        self.langs = langs
+        self.transit_translation = transit_translation
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(
                 f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path."
@@ -554,7 +564,7 @@ class ServeClientFasterWhisper(ServeClientBase):
     SINGLE_MODEL_LOCK = threading.Lock()
 
     def __init__(self, websocket, task="transcribe", device=None, language=None, client_uid=None, model="small.en",
-                 initial_prompt=None, vad_parameters=None, use_vad=True, single_model=False):
+                 initial_prompt=None, vad_parameters=None, use_vad=True, single_model=False, langs = DEF_LANGS, transit_translation=None):
         """
         Initialize a ServeClient instance.
         The Whisper model is initialized based on the client's language and device availability.
@@ -572,6 +582,17 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket)
+
+        self.langs = langs
+        self.transit_translation = transit_translation
+        
+        self.translator = MultiLingualTranslatorLive(
+            model_name_or_path="michaelfeil/ct2fast-m2m100_1.2B",
+            device='cpu',
+            compute_type="int8",
+            tokenizer=AutoTokenizer.from_pretrained("facebook/m2m100_1.2B")
+        )
+
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -817,10 +838,19 @@ class ServeClientFasterWhisper(ServeClientBase):
                 'start' and 'end' times as strings with three decimal places and the 'text'
                 of the transcription.
         """
+        translations = []
+        if (self.transit_translation):
+            start_time = time.time()
+            translations = self.translator.translate(text, tgt_langs=self.langs)
+            end_time = time.time()
+            translation_time = end_time - start_time
+            print(translations)
+            print(f"Translation took {translation_time:.3f} seconds")
         return {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
-            'text': text
+            'text': text,
+            'translations': translations
         }
 
     def update_segments(self, segments, duration):
