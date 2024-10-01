@@ -12,6 +12,8 @@ from socketify import App, WebSocket, OpCode
 from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
+from whisper_live.translator import MultiLingualTranslatorLive
+from transformers import AutoTokenizer
 #from faster_whisper.transcribe import WhisperModel
 
 logging.basicConfig(level=logging.DEBUG)
@@ -618,6 +620,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket)
+        
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -666,6 +669,13 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             ),
             OpCode.TEXT
+        )
+
+        self.translator = MultiLingualTranslatorLive(
+            model_name_or_path="michaelfeil/ct2fast-m2m100_418M",
+            device='cuda',
+            compute_type="int8",
+            tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_418M")
         )
 
     def create_model(self, device):
@@ -844,6 +854,8 @@ class ServeClientFasterWhisper(ServeClientBase):
                 logging.error(f"Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
+    
+
     def format_segment(self, start, end, text):
         """
         Formats a transcription segment with precise start and end times alongside the transcribed text.
@@ -853,15 +865,32 @@ class ServeClientFasterWhisper(ServeClientBase):
             end (float): The end time of the transcription segment in seconds.
             text (str): The transcribed text corresponding to the segment.
 
-        Returns:
+         Returns:
             dict: A dictionary representing the formatted transcription segment, including
-                'start' and 'end' times as strings with three decimal places and the 'text'
-                of the transcription.
+            'start' and 'end' times as strings with three decimal places and the 'translations'
+            of the transcription, which is a dictionary with language codes as keys and translations as values.
+
+            {
+                'start': '10.123',
+                'end': '15.456',
+                'text': Hello, how are you?',
+                'translations': {
+                    'fr': 'Bonjour, comment allez-vous?',
+                    'de': 'Hallo, wie geht es Ihnen?'
+                }
+            }
         """
+        start_time = time.time()
+        translations = self.translator.translate(text)
+        end_time = time.time()
+        translation_time = end_time - start_time
+        print(f"Translation took {translation_time:.3f} seconds")
+
         return {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
-            'text': text
+            'text': text,
+            'translations': translations
         }
 
     def update_segments(self, segments, duration):
