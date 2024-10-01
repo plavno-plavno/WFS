@@ -13,9 +13,11 @@ from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
-#from faster_whisper.transcribe import WhisperModel
+# from faster_whisper.transcribe import WhisperModel
+
 
 logging.basicConfig(level=logging.INFO)
+DEF_LANGS = ["en", "ar"]
 
 
 class ClientManager:
@@ -80,7 +82,8 @@ class ClientManager:
         """
         wait_time = None
         for start_time in self.start_times.values():
-            current_client_time_remaining = self.max_connection_time - (time.time() - start_time)
+            current_client_time_remaining = self.max_connection_time - \
+                (time.time() - start_time)
             if wait_time is None or current_client_time_remaining < wait_time:
                 wait_time = current_client_time_remaining
         return wait_time / 60 if wait_time is not None else 0
@@ -98,7 +101,11 @@ class ClientManager:
         """
         if len(self.clients) >= self.max_clients:
             wait_time = self.get_wait_time()
-            response = {"uid": options["uid"], "status": "WAIT", "message": wait_time}
+            response = {
+                "uid": options["uid"],
+                "status": "WAIT",
+                "message": wait_time
+            }
             websocket.send(json.dumps(response))
             return True
         return False
@@ -116,7 +123,10 @@ class ClientManager:
         elapsed_time = time.time() - self.start_times[websocket]
         if elapsed_time >= self.max_connection_time:
             self.clients[websocket].disconnect()
-            logging.warning(f"Client with uid '{self.clients[websocket].client_uid}' disconnected due to overtime.")
+            logging.warning(
+                f"Client with uid '{
+                    self.clients[websocket].client_uid}' disconnected due to overtime."
+            )
             return True
         return False
 
@@ -135,7 +145,6 @@ class BackendType(Enum):
     def is_faster_whisper(self) -> bool:
         return self == BackendType.FASTER_WHISPER
 
-DEF_LANGS = ["en", "ar"]
 
 class TranscriptionServer:
     RATE = 16000
@@ -148,12 +157,18 @@ class TranscriptionServer:
         self.langs = DEF_LANGS
 
     def initialize_client(
-        self, websocket, options, faster_whisper_custom_model_path):
+            self,
+            websocket,
+            options,
+            faster_whisper_custom_model_path
+    ):
         client: Optional[ServeClientBase] = None
-        
+
         if self.backend.is_faster_whisper():
             if faster_whisper_custom_model_path is not None and os.path.exists(faster_whisper_custom_model_path):
-                logging.info(f"Using custom model {faster_whisper_custom_model_path}")
+                logging.info(
+                    f"Using custom model {faster_whisper_custom_model_path}"
+                )
                 options["model"] = faster_whisper_custom_model_path
             client = ServeClientFasterWhisper(
                 websocket,
@@ -169,12 +184,12 @@ class TranscriptionServer:
             logging.info("Running faster_whisper backend.")
 
         if client is None:
-            raise ValueError(f"Backend type {self.backend.value} not recognised or not handled.")
+            raise ValueError(
+                f"Backend type {self.backend.value} not recognised or not handled."
+            )
 
         self.client_manager.add_client(websocket, client)
 
-    
-    
     def get_audio_from_websocket(self, websocket):
         """
         Receives audio buffer from websocket and creates a numpy array out of it.
@@ -200,7 +215,9 @@ class TranscriptionServer:
                 websocket.close()
                 return False  # Indicates that the connection should not continue
 
-            self.initialize_client(websocket, options, faster_whisper_custom_model_path)
+            self.initialize_client(
+                websocket, options, faster_whisper_custom_model_path
+            )
             return True
         except json.JSONDecodeError:
             logging.error("Failed to decode JSON from client")
@@ -223,10 +240,11 @@ class TranscriptionServer:
         return True
 
     def recv_audio(
-        self,
-        websocket,
-        backend: BackendType = BackendType.FASTER_WHISPER,
-        faster_whisper_custom_model_path=None):
+            self,
+            websocket,
+            backend: BackendType = BackendType.FASTER_WHISPER,
+            faster_whisper_custom_model_path=None
+    ):
         """
         Receive audio chunks from a client in an infinite loop.
 
@@ -269,13 +287,15 @@ class TranscriptionServer:
                 websocket.close()
             del websocket
 
-    def run(self,
+    def run(
+            self,
             host,
             port=9090,
             backend="tensorrt",
             faster_whisper_custom_model_path=None,
             single_model=False,
-            langs=DEF_LANGS):
+            langs=DEF_LANGS
+    ):
         """
         Run the transcription server.
 
@@ -284,15 +304,22 @@ class TranscriptionServer:
             port (int): The port number to bind the server.
         """
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
-            raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
+            raise ValueError(
+                f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path."
+            )
+        
         if single_model:
             if faster_whisper_custom_model_path:
                 logging.info("Custom model option was provided. Switching to single model mode.")
                 self.single_model = True
             else:
                 logging.info("Single model mode currently only works with custom models.")
+
         if not BackendType.is_valid(backend):
-            raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
+            raise ValueError(
+                f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}"
+            )
+        
         with serve(
             functools.partial(
                 self.recv_audio,
@@ -302,6 +329,7 @@ class TranscriptionServer:
             port
         ) as server:
             server.serve_forever()
+
     def voice_activity(self, websocket, frame_np):
         """
         Evaluates the voice activity in a given audio frame and manages the state of voice activity detection.
@@ -331,7 +359,6 @@ class TranscriptionServer:
                 time.sleep(0.1)    # Sleep 100m; wait some voice activity.
             return False
         return True
-
 
     def cleanup(self, websocket):
         """
@@ -640,9 +667,16 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         if info.language_probability > 0.5:
             self.language = info.language
-            logging.info(f'Detected language {self.language} with probability {info.language_probability}')
+            logging.info(
+                f'Detected language {self.language} with probability {info.language_probability}'
+            )
             self.websocket.send(json.dumps(
-                {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}))
+                {
+                    "uid": self.client_uid,
+                    "language": self.language,
+                    "language_prob": info.language_probability
+                }
+            ))
 
     def transcribe_audio(self, input_sample):
         """
@@ -760,7 +794,8 @@ class ServeClientFasterWhisper(ServeClientBase):
 
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
-                    time.sleep(0.25)    # wait for voice activity, result is None when no voice activity
+                    # wait for voice activity, result is None when no voice activity
+                    time.sleep(0.25)
                     continue
                 self.handle_transcription_output(result, duration)
 
@@ -818,7 +853,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             for i, s in enumerate(segments[:-1]):
                 text_ = s.text
                 self.text.append(text_)
-                start, end = self.timestamp_offset + s.start, self.timestamp_offset + min(duration, s.end)
+                start, end = self.timestamp_offset + \
+                    s.start, self.timestamp_offset + min(duration, s.end)
 
                 if start >= end:
                     continue
