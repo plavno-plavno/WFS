@@ -13,6 +13,8 @@ from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
 #from faster_whisper.transcribe import WhisperModel
+from whisper_live.translator import MultiLingualTranslatorLive
+from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -668,6 +670,13 @@ class ServeClientFasterWhisper(ServeClientBase):
             OpCode.TEXT
         )
 
+        self.translator = MultiLingualTranslatorLive(
+            model_name_or_path="michaelfeil/ct2fast-m2m100_418M",
+            device='cuda',
+            compute_type="int8",
+            tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_418M")
+        )
+        
     def create_model(self, device):
         """
         Instantiates a new model, sets it as the transcriber.
@@ -855,13 +864,30 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         Returns:
             dict: A dictionary representing the formatted transcription segment, including
-                'start' and 'end' times as strings with three decimal places and the 'text'
-                of the transcription.
+            'start' and 'end' times as strings with three decimal places and the 'translations'
+            of the transcription, which is a dictionary with language codes as keys and translations as values.
+            {
+                'start': '10.123',
+                'end': '15.456',
+                'text': Hello, how are you?',
+                'translations': {
+                    'fr': 'Bonjour, comment allez-vous?',
+                    'de': 'Hallo, wie geht es Ihnen?'
+                }
+            }
         """
+
+        start_time = time.time()
+        translations = self.translator.translate(text)
+        end_time = time.time()
+        translation_time = end_time - start_time
+        print(f"Translation took {translation_time:.3f} seconds")
+
         return {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
-            'text': text
+            'text': text,
+            'translations': translations
         }
 
     def update_segments(self, segments, duration):
