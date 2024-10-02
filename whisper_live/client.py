@@ -23,9 +23,10 @@ class Client:
 
     def __init__(
         self,
+        uid = str(uuid.uuid4()),
         host=None,
         port=None,
-        lang=None,
+        lang=["en"],
         translate=False,
         model="small",
         srt_file_path="output.srt",
@@ -47,7 +48,7 @@ class Client:
         """
         self.recording = False
         self.task = "transcribe"
-        self.uid = str(uuid.uuid4())
+        self.uid = uid
         self.waiting = False
         self.last_response_received = None
         self.disconnect_if_no_response_for = 15
@@ -105,23 +106,24 @@ class Client:
     def process_segments(self, segments):
         """Processes transcript segments."""
         text = []
-        for i, seg in enumerate(segments):
-            if not text or text[-1] != seg["text"]:
-                text.append(seg["text"])
-                if i == len(segments) - 1:
-                    self.last_segment = seg
-                elif (self.server_backend == "faster_whisper" and
-                      (not self.transcript or
-                        float(seg['start']) >= float(self.transcript[-1]['end']))):
-                    self.transcript.append(seg)
+        for lang, segs in segments.items():
+            for i, seg in enumerate(segs):
+                if not text or text[-1]!= seg["text"]:
+                    text.append(seg["text"])
+                    if i == len(segs) - 1:
+                        self.last_segment = seg
+                    elif (self.server_backend == "faster_whisper" and
+                        (not self.transcript or
+                            (len(self.transcript) > 0 and float(seg['start']) >= float(self.transcript[-1]['end'])))):
+                        self.transcript.append(seg)
         # update last received segment and last valid response time
-        if self.last_received_segment is None or self.last_received_segment != segments[-1]["text"]:
+        if self.last_received_segment is None or (len(text) > 0 and self.last_received_segment!= text[-1]):
             self.last_response_received = time.time()
-            self.last_received_segment = segments[-1]["text"]
+            self.last_received_segment = text[-1] if len(text) > 0 else None
 
         if self.log_transcription:
             # Truncate to last 3 entries for brevity.
-            text = text[-3:]
+            text = text[-3:] if len(text) > 3 else text
             utils.clear_screen()
             utils.print_transcript(text)
 
@@ -139,6 +141,8 @@ class Client:
 
         """
         message = json.loads(message)
+
+        print(message)
 
         if self.uid != message.get("uid"):
             print("[ERROR]: invalid client uid")
@@ -671,9 +675,10 @@ class TranscriptionClient(TranscriptionTeeClient):
     """
     def __init__(
         self,
+        uid,
         host,
         port,
-        lang=None,
+        lang=["en"],
         translate=False,
         model="small",
         use_vad=True,
@@ -682,7 +687,7 @@ class TranscriptionClient(TranscriptionTeeClient):
         output_transcription_path="./output.srt",
         log_transcription=True,
     ):
-        self.client = Client(host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
+        self.client = Client(uid, host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
         if save_output_recording and not output_recording_filename.endswith(".wav"):
             raise ValueError(f"Please provide a valid `output_recording_filename`: {output_recording_filename}")
         if not output_transcription_path.endswith(".srt"):

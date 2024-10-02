@@ -1,6 +1,8 @@
 from hf_hub_ctranslate2 import MultiLingualTranslatorCT2fromHfHub
 
-DEF_LANGS = ["en", "ar"]
+from whisper_live.utils import timer_decorator
+
+DEF_LANGS = ["en", "de", "ar"]
 
 class MultiLingualTranslatorLive:
     def __init__(self, model_name_or_path, device, compute_type, tokenizer):
@@ -10,7 +12,7 @@ class MultiLingualTranslatorLive:
             compute_type=compute_type,
             tokenizer=tokenizer
         )
-
+    @timer_decorator
     def translate(self, text, src_lang="en", tgt_langs=DEF_LANGS):
         len_tgt_langs = len(tgt_langs)
         outputs = self.model.generate(

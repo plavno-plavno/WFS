@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
@@ -20,7 +20,6 @@ from transformers import AutoTokenizer
 
 
 logging.basicConfig(level=logging.INFO)
-
 
 
 class ClientManager:
@@ -521,6 +520,27 @@ class ServeClientBase(object):
 
         Returns:
             segments (list): A list of transcription segments to be sent to the client.
+            {
+                "uid": "1", 
+                "segments": {
+                    "en": [
+                        {
+                            "start": "0.000", 
+                            "end": "3.000", 
+                            "text": " Hello everyone, let's get started!",
+                            "translations" : [] #Not participating yet!
+                        }
+                    ], 
+                    "de": [
+                        {
+                            "start": "0.000",
+                            "end": "2.440",
+                            "text": " Hallo, lasst uns beginnen.",
+                            "translations" : [] #Not participating yet!
+                        }
+                    ]
+                }
+            }
         """
         try:
             self.websocket.send(
@@ -717,19 +737,20 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
-        result, info = self.transcriber.transcribe(
+        lang_segments, info = self.transcriber.transcribe(
             input_sample,
             initial_prompt=self.initial_prompt,
             language=self.language,
             task=self.task,
             vad_filter=self.use_vad,
-            vad_parameters=self.vad_parameters if self.use_vad else None)
+            vad_parameters=self.vad_parameters if self.use_vad else None
+        )
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
         if self.language is None and info is not None:
             self.set_language(info)
-        return result
+        return lang_segments
 
     def get_previous_output(self):
         """
@@ -766,17 +787,20 @@ class ServeClientFasterWhisper(ServeClientBase):
             result (str): The result from whisper inference i.e. the list of segments.
             duration (float): Duration of the transcribed audio chunk.
         """
-        segments = []
-        if len(result):
-            self.t_start = None
-            last_segment = self.update_segments(result, duration)
-            segments = self.prepare_segments(last_segment)
-        else:
-            # show previous output if there is pause i.e. no output from whisper
-            segments = self.get_previous_output()
-
-        if len(segments):
-            self.send_transcription_to_client(segments)
+        lang_segments = {}
+        can_send = False
+        for lang, segments in result.items():
+            if len(segments):
+                can_send = True
+                self.t_start = None
+                last_segment = self.update_segments(segments, duration)
+                lang_segments[lang] = self.prepare_segments(last_segment)
+            else:
+                # show previous output if there is pause i.e. no output from whisper
+                segments = self.get_previous_output()
+                
+        if can_send:
+            self.send_transcription_to_client(lang_segments)
 
     def speech_to_text(self):
         """
@@ -811,14 +835,14 @@ class ServeClientFasterWhisper(ServeClientBase):
                 continue
             try:
                 input_sample = input_bytes.copy()
-                result = self.transcribe_audio(input_sample)
+                lang_segments = self.transcribe_audio(input_sample)
 
-                if result is None or self.language is None:
+                if lang_segments is None or self.language is None or lang_segments == {}:
                     self.timestamp_offset += duration
-                    # wait for voice activity, result is None when no voice activity
+                    # wait for voice activity, lang_segments is None when no voice activity
                     time.sleep(0.25)
                     continue
-                self.handle_transcription_output(result, duration)
+                self.handle_transcription_output(lang_segments, duration)
 
             except Exception as e:
                 logging.error(f"Failed to transcribe audio chunk: {e}")

@@ -24,6 +24,8 @@ from faster_whisper.vad import (
     get_speech_timestamps,
 )
 
+from whisper_live.utils import get_language_token
+
 
 class Word(NamedTuple):
     start: float
@@ -75,7 +77,7 @@ class TranscriptionOptions(NamedTuple):
 
 
 class TranscriptionInfo(NamedTuple):
-    language: str
+    language: List[str]
     language_probability: float
     duration: float
     duration_after_vad: float
@@ -203,7 +205,7 @@ class WhisperModel:
     def transcribe(
         self,
         audio: Union[str, BinaryIO, np.ndarray],
-        language: Optional[str] = None,
+        language: List[str] = ["en"],
         task: str = "transcribe",
         beam_size: int = 3,
         best_of: int = 3,
@@ -367,88 +369,90 @@ class WhisperModel:
         encoder_output = None
         all_language_probs = None
 
-        if language is None:
-            if not self.model.is_multilingual:
-                language = "en"
-                language_probability = 1
-            else:
-                if (
-                    language_detection_segments is None
-                    or language_detection_segments < 1
-                ):
-                    language_detection_segments = 1
-                start_timestamp = (
-                    float(clip_timestamps.split(",")[0])
-                    if isinstance(clip_timestamps, str)
-                    else clip_timestamps[0]
-                )
-                content_frames = (
-                    features.shape[-1] - self.feature_extractor.nb_max_frames
-                )
-                seek = (
-                    int(start_timestamp * self.frames_per_second)
-                    if start_timestamp * self.frames_per_second < content_frames
-                    else 0
-                )
-                end_frames = min(
-                    seek
-                    + self.feature_extractor.nb_max_frames
-                    * language_detection_segments,
-                    content_frames,
-                )
-                detected_language_info = {}
-                while seek < end_frames:
-                    segment = features[
-                        :, seek : seek + self.feature_extractor.nb_max_frames
-                    ]
-                    encoder_output = self.encode(segment)
-                    # results is a list of tuple[str, float] with language names and
-                    # probabilities.
-                    results = self.model.detect_language(encoder_output)[0]
-                    # Parse language names to strip out markers
-                    all_language_probs = [
-                        (token[2:-2], prob) for (token, prob) in results
-                    ]
-                    # Get top language token and probability
-                    language, language_probability = all_language_probs[0]
-                    if (
-                        language_detection_threshold is None
-                        or language_probability > language_detection_threshold
-                    ):
-                        break
-                    detected_language_info.setdefault(language, []).append(
-                        language_probability
-                    )
-                    seek += segment.shape[-1]
-                else:
-                    # If no language detected for all segments, the majority vote of the highest
-                    # projected languages for all segments is used to determine the language.
-                    language = max(
-                        detected_language_info,
-                        key=lambda lang: len(detected_language_info[lang]),
-                    )
-                    language_probability = max(detected_language_info[language])
+        # if language is None:
+        #     if not self.model.is_multilingual:
+        #         language = "en"
+        #         language_probability = 1
+        #     else:
+        #         if (
+        #             language_detection_segments is None
+        #             or language_detection_segments < 1
+        #         ):
+        #             language_detection_segments = 1
+        #         start_timestamp = (
+        #             float(clip_timestamps.split(",")[0])
+        #             if isinstance(clip_timestamps, str)
+        #             else clip_timestamps[0]
+        #         )
+        #         content_frames = (
+        #             features.shape[-1] - self.feature_extractor.nb_max_frames
+        #         )
+        #         seek = (
+        #             int(start_timestamp * self.frames_per_second)
+        #             if start_timestamp * self.frames_per_second < content_frames
+        #             else 0
+        #         )
+        #         end_frames = min(
+        #             seek
+        #             + self.feature_extractor.nb_max_frames
+        #             * language_detection_segments,
+        #             content_frames,
+        #         )
+        #         detected_language_info = {}
+        #         while seek < end_frames:
+        #             segment = features[
+        #                 :, seek : seek + self.feature_extractor.nb_max_frames
+        #             ]
+        #             encoder_output = self.encode(segment)
+        #             # results is a list of tuple[str, float] with language names and
+        #             # probabilities.
+        #             results = self.model.detect_language(encoder_output)[0]
+        #             # Parse language names to strip out markers
+        #             all_language_probs = [
+        #                 (token[2:-2], prob) for (token, prob) in results
+        #             ]
+        #             # Get top language token and probability
+        #             language, language_probability = all_language_probs[0]
+        #             if (
+        #                 language_detection_threshold is None
+        #                 or language_probability > language_detection_threshold
+        #             ):
+        #                 break
+        #             detected_language_info.setdefault(language, []).append(
+        #                 language_probability
+        #             )
+        #             seek += segment.shape[-1]
+        #         else:
+        #             # If no language detected for all segments, the majority vote of the highest
+        #             # projected languages for all segments is used to determine the language.
+        #             language = max(
+        #                 detected_language_info,
+        #                 key=lambda lang: len(detected_language_info[lang]),
+        #             )
+        #             language_probability = max(detected_language_info[language])
 
-                self.logger.info(
-                    "Detected language '%s' with probability %.2f",
-                    language,
-                    language_probability,
-                )
-        else:
-            if not self.model.is_multilingual and language != "en":
-                self.logger.warning(
-                    "The current model is English-only but the language parameter is set to '%s'; "
-                    "using 'en' instead." % language
-                )
-                language = "en"
+        #         self.logger.info(
+        #             "Detected language '%s' with probability %.2f",
+        #             language,
+        #             language_probability,
+        #         )
+        # else:
+        #     if not self.model.is_multilingual and language != "en":
+        #         self.logger.warning(
+        #             "The current model is English-only but the language parameter is set to '%s'; "
+        #             "using 'en' instead." % language
+        #         )
+        #         language = "en"
 
-            language_probability = 1
+            # language_probability = 1
+
+        language_probability = 1
 
         tokenizer = Tokenizer(
             self.hf_tokenizer,
             self.model.is_multilingual,
             task=task,
-            language=language,
+            language="en",
         )
 
         options = TranscriptionOptions(
@@ -480,11 +484,12 @@ class WhisperModel:
             hallucination_silence_threshold=hallucination_silence_threshold,
             hotwords=hotwords,
         )
-
-        segments = self.generate_segments(features, tokenizer, options, encoder_output)
-
-        if speech_chunks:
-            segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)
+        lang_segments = {}
+        for lang in language:
+            segments = self.generate_segments(features, tokenizer, options, encoder_output, lang)
+            if speech_chunks:
+                segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)
+            lang_segments[lang] = segments            
 
         info = TranscriptionInfo(
             language=language,
@@ -496,7 +501,7 @@ class WhisperModel:
             all_language_probs=all_language_probs,
         )
 
-        return segments, info
+        return lang_segments, info
 
     def generate_segments(
         self,
@@ -504,6 +509,7 @@ class WhisperModel:
         tokenizer: Tokenizer,
         options: TranscriptionOptions,
         encoder_output: Optional[ctranslate2.StorageView] = None,
+        lang: str = "en"
     ) -> Iterable[Segment]:
         content_frames = features.shape[-1] - self.feature_extractor.nb_max_frames
         content_duration = float(content_frames * self.feature_extractor.time_per_frame)
@@ -582,14 +588,16 @@ class WhisperModel:
                     "Processing segment at %s", format_timestamp(time_offset)
                 )
 
-            previous_tokens = all_tokens[prompt_reset_since:]
-            prompt = self.get_prompt(
-                tokenizer,
-                previous_tokens,
-                without_timestamps=options.without_timestamps,
-                prefix=options.prefix if seek == 0 else None,
-                hotwords=options.hotwords,
-            )
+            # previous_tokens = all_tokens[prompt_reset_since:]
+            # prompt = self.get_prompt(
+            #     tokenizer,
+            #     previous_tokens,
+            #     without_timestamps=options.without_timestamps,
+            #     prefix=options.prefix if seek == 0 else None,
+            #     hotwords=options.hotwords,
+            # )
+
+            prompt = self.get_prompt_lite(lang)
 
             if seek > 0 or encoder_output is None:
                 encoder_output = self.encode(segment)
@@ -975,6 +983,9 @@ class WhisperModel:
             )
 
         return decode_result
+    
+    def get_prompt_lite(self, lang="en") -> List[int]:
+        return [50258, get_language_token(lang), 50360]
 
     def get_prompt(
         self,

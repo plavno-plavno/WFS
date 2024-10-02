@@ -1,9 +1,11 @@
+import uuid
 from whisper_live.client import TranscriptionClient
 
 client = TranscriptionClient(
+    str(uuid.uuid4()),
     "127.0.0.1",
     9090,
-    lang="en",
+    lang=["ar", "ru"],
     translate=True,
     model="large-v3",
     use_vad=True,
