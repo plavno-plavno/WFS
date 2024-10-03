@@ -13,10 +13,6 @@ from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
 from whisper_live.transcriber import WhisperModel
-from whisper_live.translator import DEF_LANGS, MultiLingualTranslatorLive
-
-from whisper_live.translator import MultiLingualTranslatorLive
-from transformers import AutoTokenizer
 
 
 logging.basicConfig(level=logging.INFO)
@@ -125,10 +121,7 @@ class ClientManager:
         elapsed_time = time.time() - self.start_times[websocket]
         if elapsed_time >= self.max_connection_time:
             self.clients[websocket].disconnect()
-            logging.warning(
-                f"Client with uid '{
-                    self.clients[websocket].client_uid}' disconnected due to overtime."
-            )
+            logging.warning(f"Client with uid '{self.clients[websocket].client_uid}' disconnected due to overtime.")
             return True
         return False
 
@@ -156,7 +149,6 @@ class TranscriptionServer:
         self.no_voice_activity_chunks = 0
         self.use_vad = True
         self.single_model = False
-        self.langs = DEF_LANGS
 
     def initialize_client(
             self,
@@ -182,7 +174,6 @@ class TranscriptionServer:
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
                 single_model=self.single_model,
-                langs=self.langs,
                 transit_translation=self.transit_translation
             )
             logging.info("Running faster_whisper backend.")
@@ -298,7 +289,6 @@ class TranscriptionServer:
             backend="tensorrt",
             faster_whisper_custom_model_path=None,
             single_model=False,
-            langs=DEF_LANGS,
             transit_translation=None
 
     ):
@@ -310,7 +300,6 @@ class TranscriptionServer:
             port (int): The port number to bind the server.
         """
 
-        self.langs = langs
         self.transit_translation = transit_translation
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(
@@ -474,7 +463,7 @@ class ServeClientBase(object):
         duration = input_bytes.shape[0] / self.RATE
         return input_bytes, duration
 
-    def prepare_segments(self, last_segment=None):
+    def prepare_segments(self, last_segment=None, lang=None):
         """
         Prepares the segments of transcribed text to be sent to the client.
 
@@ -485,18 +474,19 @@ class ServeClientBase(object):
 
         Args:
             last_segment (str, optional): The most recent segment of transcribed text to be added
-                                          to the list of segments. Defaults to None.
+                                        to the list of segments. Defaults to None.
+            lang (str, optional): The language of the last segment. Defaults to None.
 
         Returns:
-            list: A list of transcribed text segments to be sent to the client.
+            list: A list of dictionaries containing transcribed text segments and their languages.
         """
         segments = []
         if len(self.transcript) >= self.send_last_n_segments:
-            segments = self.transcript[-self.send_last_n_segments:].copy()
+            segments = [{'text': segment, 'lang': lang} for segment in self.transcript[-self.send_last_n_segments:]]
         else:
-            segments = self.transcript.copy()
+            segments = [{'text': segment, 'lang': lang} for segment in self.transcript]
         if last_segment is not None:
-            segments = segments + [last_segment]
+            segments.append({'text': last_segment, 'lang': lang})
         return segments
 
     def get_audio_chunk_duration(self, input_bytes):
@@ -584,7 +574,7 @@ class ServeClientFasterWhisper(ServeClientBase):
     SINGLE_MODEL_LOCK = threading.Lock()
 
     def __init__(self, websocket, task="transcribe", device=None, language=None, client_uid=None, model="small.en",
-                 initial_prompt=None, vad_parameters=None, use_vad=True, single_model=False, langs = DEF_LANGS, transit_translation=None):
+                 initial_prompt=None, vad_parameters=None, use_vad=True, single_model=False, transit_translation=None):
         """
         Initialize a ServeClient instance.
         The Whisper model is initialized based on the client's language and device availability.
@@ -603,16 +593,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         super().__init__(client_uid, websocket)
 
-        self.langs = langs
         self.transit_translation = transit_translation
-        
-        self.translator = MultiLingualTranslatorLive(
-            model_name_or_path="michaelfeil/ct2fast-m2m100_1.2B",
-            device='cpu',
-            compute_type="int8",
-            tokenizer=AutoTokenizer.from_pretrained("facebook/m2m100_1.2B")
-        )
-
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -752,39 +733,12 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.set_language(info)
         return lang_segments
 
-    def get_previous_output(self):
-        """
-        Retrieves previously generated transcription outputs if no new transcription is available
-        from the current audio chunks.
-
-        Checks the time since the last transcription output and, if it is within a specified
-        threshold, returns the most recent segments of transcribed text. It also manages
-        adding a pause (blank segment) to indicate a significant gap in speech based on a defined
-        threshold.
-
-        Returns:
-            segments (list): A list of transcription segments. This may include the most recent
-                            transcribed text segments or a blank segment to indicate a pause
-                            in speech.
-        """
-        segments = []
-        if self.t_start is None:
-            self.t_start = time.time()
-        if time.time() - self.t_start < self.show_prev_out_thresh:
-            segments = self.prepare_segments()
-
-        # add a blank if there is no speech for 3 seconds
-        if len(self.text) and self.text[-1] != '':
-            if time.time() - self.t_start > self.add_pause_thresh:
-                self.text.append('')
-        return segments
-
     def handle_transcription_output(self, result, duration):
         """
         Handle the transcription output, updating the transcript and sending data to the client.
 
         Args:
-            result (str): The result from whisper inference i.e. the list of segments.
+            result (str): dictionary of segments as returned by whisper
             duration (float): Duration of the transcribed audio chunk.
         """
         lang_segments = {}
@@ -794,9 +748,10 @@ class ServeClientFasterWhisper(ServeClientBase):
                 can_send = True
                 self.t_start = None
                 last_segment = self.update_segments(segments, duration)
-                lang_segments[lang] = self.prepare_segments(last_segment)
+                if last_segment is not None:
+                    lang_segments[lang] = self.prepare_segments(last_segment, lang)
             else:
-                # show previous output if there is pause i.e. no output from whisper
+                # show previous output if there is no output from whisper
                 segments = self.get_previous_output()
                 
         if can_send:
@@ -862,19 +817,10 @@ class ServeClientFasterWhisper(ServeClientBase):
                 'start' and 'end' times as strings with three decimal places and the 'text'
                 of the transcription.
         """
-        translations = []
-        if (self.transit_translation):
-            start_time = time.time()
-            translations = self.translator.translate(text, tgt_langs=self.langs)
-            end_time = time.time()
-            translation_time = end_time - start_time
-            print(translations)
-            print(f"Translation took {translation_time:.3f} seconds")
         return {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
             'text': text,
-            'translations': translations
         }
 
     def update_segments(self, segments, duration):

@@ -1,6 +1,6 @@
 import argparse
 import os
-from whisper_live.translator import DEF_LANGS
+
 
 
 if __name__ == "__main__":
@@ -19,14 +19,6 @@ if __name__ == "__main__":
     parser.add_argument('--no_single_model', '-nsm',
                         action='store_true',
                         help='Set this if every connection should instantiate its own model. Only relevant for custom model passed using -fw.')
-    parser.add_argument('--langs', '-l',
-                        type=str,
-                        nargs='+',
-                        default=DEF_LANGS,
-                        help='List of languages to support (e.g., ["en", "ar"]).')
-    parser.add_argument('--transit_translation', '-tt',
-                        action='store_true',
-                        help='Enable transit translation.')
 
     args = parser.parse_args()
 
@@ -39,6 +31,4 @@ if __name__ == "__main__":
         backend=args.backend,
         faster_whisper_custom_model_path=args.faster_whisper_custom_model_path,
         single_model=not args.no_single_model,
-        langs=args.langs,
-        transit_translation=args.transit_translation
     )
