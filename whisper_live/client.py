@@ -124,8 +124,8 @@ class Client:
         if self.log_transcription:
             # Truncate to last 3 entries for brevity.
             text = text[-3:] if len(text) > 3 else text
-            utils.clear_screen()
-            utils.print_transcript(text)
+            # utils.clear_screen()
+            # utils.print_transcript(text)
 
     def on_message(self, ws, message):
         """
@@ -141,7 +141,6 @@ class Client:
 
         """
         message = json.loads(message)
-
         print(message)
 
         if self.uid != message.get("uid"):
