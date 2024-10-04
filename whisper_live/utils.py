@@ -29,10 +29,11 @@ def format_time(s):
 
 
 def create_srt_file(segments, output_file):
+    return
     with open(output_file, 'w', encoding='utf-8') as srt_file:
         segment_number = 1
         for segment in segments:
-            start_time = format_time(float(segment['start']))
+            start_time  = format_time(float(segment['start']))
             end_time = format_time(float(segment['end']))
             text = segment['text']
 
