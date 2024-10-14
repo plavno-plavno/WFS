@@ -89,3 +89,6 @@ instance/
 # Static and media files
 staticfiles/
 media/
+faster-whisper-large-v3-turbo/
+faster-whisper-large-v3-turbo-ct2/
+myenv/

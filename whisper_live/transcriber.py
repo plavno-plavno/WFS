@@ -4,6 +4,7 @@ import itertools
 import json
 import logging
 import os
+import time
 import zlib
 
 from inspect import signature
@@ -187,7 +188,7 @@ class WhisperModel:
         self,
         audio: Union[str, BinaryIO, np.ndarray],
         language: Optional[str] = None,
-        task: str = "transcribe",
+        task: str = "translate",
         beam_size: int = 5,
         best_of: int = 5,
         patience: float = 1,
@@ -405,8 +406,11 @@ class WhisperModel:
             clip_timestamps=clip_timestamps,
             hallucination_silence_threshold=hallucination_silence_threshold,
         )
-
+        start_time = time.time()
         segments = self.generate_segments(features, tokenizer, options, encoder_output)
+        end_time = time.time()
+        logging.info(f"Segment generation took {end_time - start_time:.2f} seconds")
+
 
         if speech_chunks:
             segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)

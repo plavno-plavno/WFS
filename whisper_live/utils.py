@@ -3,6 +3,7 @@ import textwrap
 import scipy
 import ffmpeg
 import numpy as np
+from numpy.core.defchararray import translate
 
 
 def clear_screen():
@@ -33,10 +34,15 @@ def create_srt_file(segments, output_file):
             start_time = format_time(float(segment['start']))
             end_time = format_time(float(segment['end']))
             text = segment['text']
+            translate = segment.get("translate")
 
             srt_file.write(f"{segment_number}\n")
             srt_file.write(f"{start_time} --> {end_time}\n")
-            srt_file.write(f"{text}\n\n")
+            srt_file.write(f"{text}\n")
+            if translate:
+                for l, t in translate.items():
+                    srt_file.write(f"{l} : {t}\n")
+            srt_file.write(f"\n")
 
             segment_number += 1
 
