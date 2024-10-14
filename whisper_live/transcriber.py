@@ -207,8 +207,8 @@ class WhisperModel:
         audio: Union[str, BinaryIO, np.ndarray],
         language: List[str] = ["en"],
         task: str = "transcribe",
-        beam_size: int = 3,
-        best_of: int = 1,
+        beam_size: int = 4,
+        best_of: int = 4,
         patience: float = 1,
         length_penalty: float = 1,
         repetition_penalty: float = 1,
@@ -887,15 +887,20 @@ class WhisperModel:
         for temperature in options.temperatures:
             if temperature > 0:
                 kwargs = {
-                    "beam_size": 1,
+                    "beam_size": 4,
                     "num_hypotheses": options.best_of,
                     "sampling_topk": 0,
                     "sampling_temperature": temperature,
+                    "sampling_topk": 5,
                 }
             else:
                 kwargs = {
+                    "beam_size": 4,
+                    "num_hypotheses": options.best_of,
                     "beam_size": options.beam_size,
                     "patience": options.patience,
+                    "num_hypotheses": options.best_of,
+                    "sampling_topk": 5,
                 }
 
             result = self.model.generate(

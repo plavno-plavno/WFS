@@ -1,0 +1,24 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../dropby_api_v2"
+		}
+	],
+	"settings": {
+		"terminal.integrated.profiles.linux": {
+			"bash": {
+				"path": "bash",
+				"args": [
+					"-i",
+					"-l",
+					"-c",
+					"source ./venv/bin/activate && exec bash"
+				]
+			}
+		},
+		"terminal.integrated.defaultProfile.linux": "bash"
+	}
+}

@@ -489,7 +489,7 @@ class ServeClientBase(object):
         return input_bytes.shape[0] / self.RATE
 
     def send_transcription_to_client(self, segments):
-        print("****************************")
+        print("*************__send_transcription_to_client__***************")
         print(segments)
         """
         Sends the specified transcription segments to the client over the websocket connection.
@@ -728,7 +728,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
     def handle_transcription_output(self, result, duration):
 
-        print("******************************")
+        print("&&&&&&&&&&&&__handle_transcription_output__&&&&&&&&&&&&&")
         print(result)
         """
         Handle the transcription output, updating the transcript and sending data to the client.

@@ -20,7 +20,7 @@ client = TranscriptionClient(
     str(uuid.uuid4()),
     "85.165.201.219",
     44071,
-    lang=["en", "ru"],
+    lang=["en", "ru", "de"],
     translate=True,
     model="large-v3",
     use_vad=True,
