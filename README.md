@@ -19,14 +19,7 @@ input from microphone and pre-recorded audio files.
 
 - Install whisper-live from pip
 ```bash
- pip install whisper-live
-```
-```bash
- pip install sentencepiece
-```
-```bash
- pip install hf_hub_ctranslate2
-```
+pip install transformers ctranslate2 sentencepiece hf_hub_ctranslate2```
 
 
 
