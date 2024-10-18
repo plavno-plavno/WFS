@@ -21,6 +21,14 @@ input from microphone and pre-recorded audio files.
 ```bash
  pip install whisper-live
 ```
+```bash
+ pip install sentencepiece
+```
+```bash
+ pip install hf_hub_ctranslate2
+```
+
+
 
 ### Setting up NVIDIA/TensorRT-LLM for TensorRT backend
 - Please follow [TensorRT_whisper readme](https://github.com/collabora/WhisperLive/blob/main/TensorRT_whisper.md) for setup of [NVIDIA/TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and for building Whisper-TensorRT engine.
