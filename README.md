@@ -16,12 +16,17 @@ input from microphone and pre-recorded audio files.
 ```bash
  bash scripts/setup.sh
 ```
-
 - Install whisper-live from pip
+```bash
+ pip install whisper-live
+ ```
+- Install translate
 ```bash
 pip install transformers ctranslate2 sentencepiece hf_hub_ctranslate2
 ```
-
+```bash
+git clone https://huggingface.co/michaelfeil/ct2fast-m2m100_418M ~/.cache/huggingface/hub/models--michaelfeil--ct2fast-m2m100_418M
+```
 
 
 ### Setting up NVIDIA/TensorRT-LLM for TensorRT backend
