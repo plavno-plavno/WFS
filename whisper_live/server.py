@@ -51,9 +51,8 @@ class SegmentProcessor:
                 ready_segments.append(seg)
                 self.last_sent_end = end
                 self.last_sent_start = start
-                break  # Отправляем только один сегмент за раз
+                break
         
-        # Удаляем устаревшие счетчики
         self.repeat_count = {k: v for k, v in self.repeat_count.items() if float(k) > self.last_sent_end}
         
         return ready_segments
