@@ -34,11 +34,11 @@ class MultiLingualTranslatorLive:
         )
 
     @timer_decorator
-    def get_translation(self, text, src_lang="ru", tgt_langs=["ru","de","en"]) -> Dict:
+    def get_translation(self, text, src_lang="ru", tgt_langs=["de","en","ar","hi","pl"]) -> Dict:
         len_tgt_langs = len(tgt_langs)
         outputs = self.model.generate(
             [text] * len_tgt_langs,
             src_lang=[src_lang] * len_tgt_langs,
             tgt_lang=tgt_langs
         )
-        return {lang: output for lang, output in zip(["rus", "deu","eng"], outputs)}
+        return {lang: output for lang, output in zip(["de","en","ar","hi","pl"], outputs)}

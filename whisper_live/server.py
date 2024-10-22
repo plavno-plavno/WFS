@@ -462,6 +462,7 @@ class ServeClientBase(object):
         Returns:
             segments (list): A list of transcription segments to be sent to the client.
         """
+        print(segments)
         try:
             self.websocket.send(
                 json.dumps({
@@ -802,11 +803,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         offset = None
         self.current_out = ''
         last_segment = None
-        print("SEGMENTS")
-        print(segments)
-        print("TRANSCRIPT")
-        print(self.transcript)
-
         # process complete segments
         if len(segments) > 1:
             for i, s in enumerate(segments[:-1]):
@@ -822,17 +818,13 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.transcript.append(self.format_segment(start, end, text_,True))
                 offset = min(duration, s.end)
 
-        print("TRANSCRIPT AFTER")
-        print(self.transcript)
-
         # only process the segments if it satisfies the no_speech_thresh
         if segments[-1].no_speech_prob <= self.no_speech_thresh:
             self.current_out += segments[-1].text
             last_segment = self.format_segment(
                 self.timestamp_offset + segments[-1].start,
                 self.timestamp_offset + min(duration, segments[-1].end),
-                self.current_out,
-                True
+                self.current_out
             )
 
         # if same incomplete segment is seen multiple times then update the offset
@@ -848,7 +840,8 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.transcript.append(self.format_segment(
                     self.timestamp_offset,
                     self.timestamp_offset + duration,
-                    self.current_out
+                    self.current_out,
+                    True
                 ))
             self.current_out = ''
             offset = duration
