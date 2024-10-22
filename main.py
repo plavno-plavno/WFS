@@ -8,19 +8,19 @@ from whisper_live.client import TranscriptionClient
 # local_dir = "faster-whisper-large-v3-turbo-ct2"
 # snapshot_download(repo_id=repo_id, local_dir=local_dir, repo_type="model")
 
-client = TranscriptionClient(
-    str(uuid.uuid4()),
-    "127.0.0.1",
-    9090,
-    lang="en",
-    translate=True,
-    model="small",
-    use_vad=True,
-    save_output_recording=False,  # Only used for microphone input, False by Default
-    output_recording_filename="./output_recording.wav"  # Only used for microphone input
-)
+# client = TranscriptionClient(
+#     str(uuid.uuid4()),
+#     "127.0.0.1",
+#     9090,
+#     lang="en",
+#     translate=True,
+#     model="small",
+#     use_vad=True,
+#     save_output_recording=False,  # Only used for microphone input, False by Default
+#     output_recording_filename="./output_recording.wav"  # Only used for microphone input
+# )
 
-client()
+# client()
 
 # from huggingface_hub import snapshot_download
 #
@@ -53,14 +53,45 @@ client()
 
 # client = TranscriptionClient(
 #     str(uuid.uuid4()),
-#     "77.48.24.153",
-#     40233,
+#     "71.105.97.10",
+#     42280,
 #     lang="ru",
 #     translate=True,
 #     model="large-v3",
 #     use_vad=True,
 #     save_output_recording=True,  # Only used for microphone input, False by Default
 #     output_recording_filename="./output_recording.wav"  # Only used for microphone input
+# )
+
+# client()
+
+
+client = TranscriptionClient(
+    str(uuid.uuid4()),
+    "83.7.103.139",
+    41759,
+    lang="ru",
+    translate=True,
+    model="large-v3",
+    use_vad=True,
+    save_output_recording=False,  # Only used for microphone input, False by Default
+    output_recording_filename="./output_recording.wav"  # Only used for microphone input
+)
+
+client()
+
+
+# client = TranscriptionClient(
+#     str(uuid.uuid4()),
+#     "83.26.80.240",
+#     41387,
+#     lang="ru",
+#     translate=True,
+#     model="large-v3",
+#     use_vad=True,
+#     save_output_recording=True,  # Only used for microphone input, False by Default
+#     output_recording_filename="./output_recording.wav"  # Only used for microphone input
+    
 # )
 
 # client()

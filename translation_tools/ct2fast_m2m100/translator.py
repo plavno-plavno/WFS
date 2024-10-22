@@ -7,13 +7,33 @@ from transformers import AutoTokenizer
 import time
 from functools import wraps
 
+
+language_dict = {
+    # 'ar': 'ara',
+    # 'bn': 'ben',
+    # 'my':'mya',
+    # 'ur': 'urd',
+    # 'nl': 'nld',
+    # 'fi': 'fin',
+    # 'de': 'deu',
+    # 'he': 'heb',
+    # 'hi': 'hin',
+    # 'id': 'ind',
+    # 'es':'spa',
+    # 'kn': 'kan',
+    # 'ms':'mkn',
+    'ru': 'rus'
+}
+
+language_dict_key = list(language_dict.keys())
+
 def timer_decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print(f"{func.__name__} took {end_time - start_time:.2f} seconds")
+        # print(f"{func.__name__} took {end_time - start_time:.2f} seconds")
         return result
     return wrapper
 
@@ -34,11 +54,11 @@ class MultiLingualTranslatorLive:
         )
 
     @timer_decorator
-    def get_translation(self, text, src_lang="en", tgt_langs=["ru","de", "ur", "ar", "hi"]) -> Dict:
+    def get_translation(self, text, src_lang="en", tgt_langs=language_dict_key) -> Dict:
         len_tgt_langs = len(tgt_langs)
         outputs = self.model.generate(
             [text] * len_tgt_langs,
             src_lang=[src_lang] * len_tgt_langs,
             tgt_lang=tgt_langs
         )
-        return {lang: output for lang, output in zip(["rus", "deu", "urd", "ara", "hin"], outputs)}
+        return {language_dict[lang]: output for lang, output in zip(tgt_langs, outputs) if lang in language_dict}

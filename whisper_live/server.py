@@ -20,7 +20,43 @@ try:
 except Exception:
     pass
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
+
+
+class SegmentProcessor:
+    def __init__(self):
+        self.segments = []
+        self.last_sent_start = 0
+        self.last_sent_end = 0
+        self.repeat_count = {}
+
+
+    def process_segments(self, new_segments):
+        ready_segments = []
+        
+        for seg in new_segments:
+            start = float(seg['start'])
+            end = float(seg['end'])
+
+
+            if end <= self.last_sent_end or start == self.last_sent_start:
+                continue
+            
+            if end in self.repeat_count:
+                self.repeat_count[end] += 1
+            else:
+                self.repeat_count[end] = 1
+            
+            if self.repeat_count[end] > 2:
+                ready_segments.append(seg)
+                self.last_sent_end = end
+                self.last_sent_start = start
+                break  # Отправляем только один сегмент за раз
+        
+        # Удаляем устаревшие счетчики
+        self.repeat_count = {k: v for k, v in self.repeat_count.items() if float(k) > self.last_sent_end}
+        
+        return ready_segments
 
 
 class ClientManager:
@@ -418,6 +454,7 @@ class ServeClientBase(object):
         self.add_pause_thresh = 3  # add a blank to segment list as a pause(no speech) for 3 seconds
         self.transcript = []
         self.send_last_n_segments = 10
+        self.segment_processor = SegmentProcessor()
 
         # text formatting
         self.pick_previous_segments = 2
@@ -532,6 +569,10 @@ class ServeClientBase(object):
         return input_bytes.shape[0] / self.RATE
 
     def send_transcription_to_client(self, segments):
+        
+        ready_segments = self.segment_processor.process_segments(segments)
+
+
         """
         Sends the specified transcription segments to the client over the websocket connection.
 
@@ -541,15 +582,22 @@ class ServeClientBase(object):
         Returns:
             segments (list): A list of transcription segments to be sent to the client.
         """
-        try:
-            self.websocket.send(
-                json.dumps({
-                    "uid": self.client_uid,
-                    "segments": segments,
-                })
-            )
-        except Exception as e:
-            logging.error(f"[ERROR]: Sending data to client: {e}")
+        if ready_segments:
+            segment = ready_segments[0]
+            text = segment.get("text")
+            translate = self.translator.get_translation(text)
+            translate["eng"] = text
+            segment["translate"] = translate
+            print(translate["rus"])
+            try:
+                self.websocket.send(
+                    json.dumps({
+                        "uid": self.client_uid,
+                        "segments": ready_segments,
+                    })
+                )
+            except Exception as e:
+                logging.error(f"[ERROR]: Sending data to client: {e}")
 
     def disconnect(self):
         """
@@ -1013,13 +1061,10 @@ class ServeClientFasterWhisper(ServeClientBase):
                 of the transcription.
         """
 
-        translate = self.translator.get_translation(text)
-        translate["eng"] = text
         return {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
-            'text': text,
-            "translate": translate
+            'text': text
         }
 
     def update_segments(self, segments, duration):
