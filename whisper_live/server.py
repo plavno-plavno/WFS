@@ -570,8 +570,6 @@ class ServeClientBase(object):
     def send_transcription_to_client(self, segments):
         
         ready_segments = self.segment_processor.process_segments(segments)
-
-
         """
         Sends the specified transcription segments to the client over the websocket connection.
 
@@ -584,15 +582,15 @@ class ServeClientBase(object):
         if ready_segments:
             segment = ready_segments[0]
             text = segment.get("text")
-            translate = self.translator.get_translation(text)
-            translate["eng"] = text
+            translate = self.translator.get_translation(text = text, src_lang = self.language)
             segment["translate"] = translate
             print(translate["rus"])
+
             try:
                 self.websocket.send(
                     json.dumps({
                         "uid": self.client_uid,
-                        "segments": ready_segments,
+                        "segments": [segment],
                     })
                 )
             except Exception as e:

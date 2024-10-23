@@ -9,19 +9,20 @@ from functools import wraps
 
 
 language_dict = {
-    # 'ar': 'ara',
-    # 'bn': 'ben',
-    # 'my':'mya',
-    # 'ur': 'urd',
-    # 'nl': 'nld',
-    # 'fi': 'fin',
-    # 'de': 'deu',
-    # 'he': 'heb',
-    # 'hi': 'hin',
-    # 'id': 'ind',
-    # 'es':'spa',
-    # 'kn': 'kan',
-    # 'ms':'mkn',
+    'en': "eng",
+    'ar': 'ara',
+    'bn': 'ben',
+    'my':'mya',
+    'ur': 'urd',
+    'nl': 'nld',
+    'fi': 'fin',
+    'de': 'deu',
+    'he': 'heb',
+    'hi': 'hin',
+    'id': 'ind',
+    'es':'spa',
+    'kn': 'kan',
+    'ms':'mkn',
     'ru': 'rus'
 }
 
@@ -55,10 +56,13 @@ class MultiLingualTranslatorLive:
 
     @timer_decorator
     def get_translation(self, text, src_lang="en", tgt_langs=language_dict_key) -> Dict:
+        tgt_langs = [x for x in tgt_langs if x!= src_lang]
         len_tgt_langs = len(tgt_langs)
         outputs = self.model.generate(
             [text] * len_tgt_langs,
             src_lang=[src_lang] * len_tgt_langs,
             tgt_lang=tgt_langs
         )
-        return {language_dict[lang]: output for lang, output in zip(tgt_langs, outputs) if lang in language_dict}
+        translations = {language_dict[lang]: output for lang, output in zip(tgt_langs, outputs) if lang in language_dict}
+        translations[language_dict[src_lang]] = text
+        return translations

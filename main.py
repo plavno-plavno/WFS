@@ -71,7 +71,7 @@ client = TranscriptionClient(
     "83.7.103.139",
     41759,
     lang="ru",
-    translate=True,
+    translate=False,
     model="large-v3",
     use_vad=True,
     save_output_recording=False,  # Only used for microphone input, False by Default
