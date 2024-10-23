@@ -8,25 +8,7 @@ import time
 from functools import wraps
 
 
-language_dict = {
-    'en': "eng",
-    'ar': 'ara',
-    'bn': 'ben',
-    'my':'mya',
-    'ur': 'urd',
-    'nl': 'nld',
-    'fi': 'fin',
-    'de': 'deu',
-    'he': 'heb',
-    'hi': 'hin',
-    'id': 'ind',
-    'es':'spa',
-    'kn': 'kan',
-    'ms':'mkn',
-    'ru': 'rus'
-}
-
-language_dict_key = list(language_dict.keys())
+language_abbr = ["hi", "en", "ar", "de", "fr", "sw"]
 
 def timer_decorator(func):
     @wraps(func)
@@ -55,7 +37,7 @@ class MultiLingualTranslatorLive:
         )
 
     @timer_decorator
-    def get_translation(self, text, src_lang="en", tgt_langs=language_dict_key) -> Dict:
+    def get_translation(self, text, src_lang="en", tgt_langs=language_abbr) -> Dict:
         tgt_langs = [x for x in tgt_langs if x!= src_lang]
         len_tgt_langs = len(tgt_langs)
         outputs = self.model.generate(
@@ -63,6 +45,6 @@ class MultiLingualTranslatorLive:
             src_lang=[src_lang] * len_tgt_langs,
             tgt_lang=tgt_langs
         )
-        translations = {language_dict[lang]: output for lang, output in zip(tgt_langs, outputs) if lang in language_dict}
-        translations[language_dict[src_lang]] = text
+        translations =  {lang: output for lang, output in zip(tgt_langs, outputs)}
+        if src_lang in tgt_langs: translations[src_lang] = text
         return translations

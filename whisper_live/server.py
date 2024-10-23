@@ -584,7 +584,7 @@ class ServeClientBase(object):
             text = segment.get("text")
             translate = self.translator.get_translation(text = text, src_lang = self.language)
             segment["translate"] = translate
-            print(translate["rus"])
+            print([segment])
 
             try:
                 self.websocket.send(
