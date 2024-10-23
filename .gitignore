@@ -89,3 +89,6 @@ instance/
 # Static and media files
 staticfiles/
 media/
+myenv/
+*.str
+#
