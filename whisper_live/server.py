@@ -3,6 +3,7 @@ import time
 import threading
 import json
 import functools
+import ssl
 import logging
 from enum import Enum
 from typing import List, Optional
@@ -11,8 +12,8 @@ import torch
 import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
-from whisper_live.vad import VoiceActivityDetector
 from whisper_live.transcriber import WhisperModel
+from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
 logging.basicConfig(level=logging.INFO)
@@ -142,7 +143,6 @@ class TranscriptionServer:
 
     def __init__(self):
         self.client_manager = ClientManager()
-        self.no_voice_activity_chunks = 0
         self.use_vad = True
         self.single_model = False
 
@@ -172,8 +172,6 @@ class TranscriptionServer:
 
         self.client_manager.add_client(websocket, client)
 
-    
-    
     def get_audio_from_websocket(self, websocket):
         """
         Receives audio buffer from websocket and creates a numpy array out of it.
@@ -205,7 +203,7 @@ class TranscriptionServer:
             logging.error("Failed to decode JSON from client")
             return False
         except ConnectionClosed:
-            logging.info("Connection closed by client")
+            logging.error("Connection closed by client")
             return False
         except Exception as e:
             logging.error(f"Error during new connection initialization: {str(e)}")
@@ -217,7 +215,6 @@ class TranscriptionServer:
 
         if frame_np is False or frame_np is None or frame_np.size == 0:
             return False
-
         client.add_frames(frame_np)
         return True
 
@@ -244,8 +241,7 @@ class TranscriptionServer:
             websocket (WebSocket): The WebSocket connection for the client.
             backend (str): The backend to run the server with.
             faster_whisper_custom_model_path (str): path to custom faster whisper model.
-            whisper_tensorrt_path (str): Required for tensorrt backend.
-            trt_multilingual(bool): Only used for tensorrt, True if multilingual model.
+
 
         Raises:
             Exception: If there is an error during the audio frame processing.
@@ -273,64 +269,51 @@ class TranscriptionServer:
             port=9090,
             backend="tensorrt",
             faster_whisper_custom_model_path=None,
-            single_model=False):
+            single_model=False,
+            ssl_cert_file=None,
+            ssl_key_file=None,
+            ssl_passphrase=None):
         """
-        Run the transcription server.
+        Run the transcription server with optional SSL support.
 
         Args:
             host (str): The host address to bind the server.
             port (int): The port number to bind the server.
+            ssl_cert_file (str): Path to the SSL certificate file.
+            ssl_key_file (str): Path to the SSL key file.
+            ssl_passphrase (str): Optional passphrase for the SSL key.
         """
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
+
         if single_model:
             if faster_whisper_custom_model_path:
                 logging.info("Custom model option was provided. Switching to single model mode.")
                 self.single_model = True
-                # TODO: load model initially
             else:
                 logging.info("Single model mode currently only works with custom models.")
+
         if not BackendType.is_valid(backend):
             raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
+
+        # Create SSL context if SSL parameters are provided
+        ssl_context = None
+        if ssl_cert_file and ssl_key_file:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(certfile=ssl_cert_file, keyfile=ssl_key_file, password=ssl_passphrase)
+
+        # Start the server with SSL support if ssl_context is not None
         with serve(
-            functools.partial(
-                self.recv_audio,
-                backend=BackendType(backend),
-                faster_whisper_custom_model_path=faster_whisper_custom_model_path),
-            host,
-            port
+                functools.partial(
+                    self.recv_audio,
+                    backend=BackendType(backend),
+                    faster_whisper_custom_model_path=faster_whisper_custom_model_path,
+                ),
+                host,
+                port,
+                ssl=ssl_context  # Pass the SSL context if created
         ) as server:
             server.serve_forever()
-
-    def voice_activity(self, websocket, frame_np):
-        """
-        Evaluates the voice activity in a given audio frame and manages the state of voice activity detection.
-
-        This method uses the configured voice activity detection (VAD) model to assess whether the given audio frame
-        contains speech. If the VAD model detects no voice activity for more than three consecutive frames,
-        it sets an end-of-speech (EOS) flag for the associated client. This method aims to efficiently manage
-        speech detection to improve subsequent processing steps.
-
-        Args:
-            websocket: The websocket associated with the current client. Used to retrieve the client object
-                    from the client manager for state management.
-            frame_np (numpy.ndarray): The audio frame to be analyzed. This should be a NumPy array containing
-                                    the audio data for the current frame.
-
-        Returns:
-            bool: True if voice activity is detected in the current frame, False otherwise. When returning False
-                after detecting no voice activity for more than three consecutive frames, it also triggers the
-                end-of-speech (EOS) flag for the client.
-        """
-        if not self.vad_detector(frame_np):
-            self.no_voice_activity_chunks += 1
-            if self.no_voice_activity_chunks > 3:
-                client = self.client_manager.get_client(websocket)
-                if not client.eos:
-                    client.set_eos(True)
-                time.sleep(0.1)    # Sleep 100m; wait some voice activity.
-            return False
-        return True
 
     def cleanup(self, websocket):
         """
@@ -488,6 +471,7 @@ class ServeClientBase(object):
         Returns:
             segments (list): A list of transcription segments to be sent to the client.
         """
+        print(segments)
         try:
             self.websocket.send(
                 json.dumps({
@@ -548,6 +532,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket)
+        self.translator = MultiLingualTranslatorLive()
+        self.execution_times=[]
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -650,21 +636,17 @@ class ServeClientFasterWhisper(ServeClientBase):
     def transcribe_audio(self, input_sample):
         """
         Transcribes the provided audio sample using the configured transcriber instance.
-
-        If the language has not been set, it updates the session's language based on the transcription
-        information.
-
-        Args:
-            input_sample (np.array): The audio chunk to be transcribed. This should be a NumPy
-                                    array representing the audio data.
+        ...
 
         Returns:
-            The transcription result from the transcriber. The exact format of this result
-            depends on the implementation of the `transcriber.transcribe` method but typically
-            includes the transcribed text.
+            The transcription result from the transcriber.
         """
+
+        start_time = time.time()  # Start the timer
+
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
+
         result, info = self.transcriber.transcribe(
             input_sample,
             initial_prompt=self.initial_prompt,
@@ -672,13 +654,21 @@ class ServeClientFasterWhisper(ServeClientBase):
             task=self.task,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
+
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
         if self.language is None and info is not None:
             self.set_language(info)
-        return result
 
+        end_time = time.time()  # End the timer
+        execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
+        self.execution_times.append(execution_time)  # Store the execution time
+        avg_execution_time = sum(self.execution_times) / len(self.execution_times)  # Calculate average
+        print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
+        print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
+
+        return result
     def get_previous_output(self):
         """
         Retrieves previously generated transcription outputs if no new transcription is available
@@ -755,15 +745,14 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             input_bytes, duration = self.get_audio_chunk_for_processing()
             if duration < 1.0:
-                time.sleep(0.1)     # wait for audio chunks to arrive
+                time.sleep(0.1)  # wait for audio chunks to arrive
                 continue
             try:
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
-
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
-                    time.sleep(0.25)    # wait for voice activity, result is None when no voice activity
+                    time.sleep(0.25)  # wait for voice activity, result is None when no voice activity
                     continue
                 self.handle_transcription_output(result, duration)
 
@@ -771,7 +760,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
-    def format_segment(self, start, end, text):
+    def format_segment(self, start, end, text, translate=False):
         """
         Formats a transcription segment with precise start and end times alongside the transcribed text.
 
@@ -779,17 +768,25 @@ class ServeClientFasterWhisper(ServeClientBase):
             start (float): The start time of the transcription segment in seconds.
             end (float): The end time of the transcription segment in seconds.
             text (str): The transcribed text corresponding to the segment.
+            translate (bool): Whether to include a translated version of the text.
 
         Returns:
             dict: A dictionary representing the formatted transcription segment, including
                 'start' and 'end' times as strings with three decimal places and the 'text'
-                of the transcription.
+                of the transcription. Optionally, it may include 'translate' if translateItem is True.
         """
-        return {
+
+
+        item = {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
-            'text': text
+            'text': text,
         }
+
+        if translate:
+            item['translate'] = self.translator.get_translation(text)
+
+        return item
 
     def update_segments(self, segments, duration):
         """
@@ -815,7 +812,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         offset = None
         self.current_out = ''
         last_segment = None
-
         # process complete segments
         if len(segments) > 1:
             for i, s in enumerate(segments[:-1]):
@@ -828,7 +824,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 if s.no_speech_prob > self.no_speech_thresh:
                     continue
 
-                self.transcript.append(self.format_segment(start, end, text_))
+                self.transcript.append(self.format_segment(start, end, text_,True))
                 offset = min(duration, s.end)
 
         # only process the segments if it satisfies the no_speech_thresh
@@ -853,7 +849,8 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.transcript.append(self.format_segment(
                     self.timestamp_offset,
                     self.timestamp_offset + duration,
-                    self.current_out
+                    self.current_out,
+                    True
                 ))
             self.current_out = ''
             offset = duration
