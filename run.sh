@@ -1,1 +1,25 @@
-python3 run_server.py --port 9090 --backend faster_whisper -fw "faster-whisper-large-v3"
+#!/bin/bash
+
+# Define paths to SSL files and optional passphrase
+SSL_CERT_FILE="/path/to/cert.pem"
+SSL_KEY_FILE="/path/to/key.pem"
+SSL_PASSPHRASE="your_passphrase"  # Set this to your SSL key passphrase if needed
+
+# Initialize SSL options
+SSL_OPTIONS=""
+
+# Check if SSL certificate and key files exist
+if [[ -f "$SSL_CERT_FILE" && -f "$SSL_KEY_FILE" ]]; then
+    echo "SSL files found. Enabling SSL support."
+    SSL_OPTIONS="--ssl_cert_file \"$SSL_CERT_FILE\" --ssl_key_file \"$SSL_KEY_FILE\""
+
+    # Add passphrase if provided
+    if [[ -n "$SSL_PASSPHRASE" ]]; then
+        SSL_OPTIONS="$SSL_OPTIONS --ssl_passphrase \"$SSL_PASSPHRASE\""
+    fi
+else
+    echo "SSL files not found. Running without SSL support."
+fi
+
+# Run the Python server script with appropriate SSL options
+eval python3 run_server.py --port 9090 --backend faster_whisper -fw "faster-whisper-large-v3" $SSL_OPTIONS

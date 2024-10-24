@@ -1,6 +1,6 @@
 faster-whisper==1.0.3
 torch==2.3.1
-websockets==11.0.3
+websockets==13.1.0
 onnxruntime==1.17.1
 numba==0.57.1
 openai-whisper==20231117

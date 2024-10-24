@@ -3,6 +3,7 @@ import time
 import threading
 import json
 import functools
+import ssl
 import logging
 from enum import Enum
 from typing import List, Optional
@@ -11,11 +12,11 @@ import torch
 import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
-from whisper_live.transcriber_cut import WhisperModel
+from whisper_live.transcriber import WhisperModel
 from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 class ClientManager:
@@ -284,16 +285,24 @@ class TranscriptionServer:
         """
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
-        
+
         if single_model:
             if faster_whisper_custom_model_path:
                 logging.info("Custom model option was provided. Switching to single model mode.")
                 self.single_model = True
             else:
                 logging.info("Single model mode currently only works with custom models.")
-        
+
         if not BackendType.is_valid(backend):
             raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
+
+        # Create SSL context if SSL parameters are provided
+        ssl_context = None
+        if ssl_cert_file and ssl_key_file:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(certfile=ssl_cert_file, keyfile=ssl_key_file, password=ssl_passphrase)
+
+        # Start the server with SSL support if ssl_context is not None
         with serve(
                 functools.partial(
                     self.recv_audio,
@@ -301,10 +310,10 @@ class TranscriptionServer:
                     faster_whisper_custom_model_path=faster_whisper_custom_model_path,
                 ),
                 host,
-                port
+                port,
+                ssl=ssl_context  # Pass the SSL context if created
         ) as server:
             server.serve_forever()
-
 
     def cleanup(self, websocket):
         """
