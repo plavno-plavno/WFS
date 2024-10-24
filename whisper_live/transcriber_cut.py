@@ -15,7 +15,7 @@ from faster_whisper.audio import decode_audio, pad_or_trim
 from faster_whisper.feature_extractor import FeatureExtractor
 from faster_whisper.tokenizer import _LANGUAGE_CODES, Tokenizer
 from faster_whisper.utils import download_model, format_timestamp, get_end, get_logger
-from whisper_live.vad2 import (
+from whisper_live.vad_silero import (
     SpeechTimestampsMap,
     VadOptions,
     collect_chunks,
