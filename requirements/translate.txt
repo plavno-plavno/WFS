@@ -1,4 +1,0 @@
-sentencepiece
-hf_hub_ctranslate2
-transformers==4.21.3
-tokenizers==0.15.2

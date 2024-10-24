@@ -15,7 +15,7 @@ from whisper_live.transcriber_cut import WhisperModel
 from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.DEBUG)
 
 
 class ClientManager:
