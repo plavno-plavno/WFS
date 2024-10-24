@@ -22,7 +22,7 @@ input from microphone and pre-recorded audio files.
  ```
 - Install translate
 ```bash
-pip install transformers ctranslate2 sentencepiece hf_hub_ctranslate2
+pip install transformers ctranslate2==4.4.0 sentencepiece hf_hub_ctranslate2
 ```
 ```bash
 git clone https://huggingface.co/michaelfeil/ct2fast-m2m100_418M ~/.cache/huggingface/hub/models--michaelfeil--ct2fast-m2m100_418M
