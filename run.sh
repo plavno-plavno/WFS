@@ -5,6 +5,14 @@ SSL_CERT_FILE="/path/to/cert.pem"
 SSL_KEY_FILE="/path/to/key.pem"
 SSL_PASSPHRASE="your_passphrase"  # Set this to your SSL key passphrase if needed
 
+# Determine the path to pip
+if [ -x "/opt/conda/bin/python" ]; then
+    CMD="/opt/conda/bin/python"
+else
+    CMD="python"
+fi
+
+
 # Initialize SSL options
 SSL_OPTIONS=""
 
@@ -22,4 +30,4 @@ else
 fi
 
 # Run the Python server script with appropriate SSL options
-eval python3 run_server.py --port 9090 --backend faster_whisper -fw "faster-whisper-large-v3" $SSL_OPTIONS
+eval "$CMD run_server.py --port 9090 --backend faster_whisper -fw 'faster-whisper-large-v3' $SSL_OPTIONS" > /dev/null 2>&1 &
