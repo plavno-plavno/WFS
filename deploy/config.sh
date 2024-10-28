@@ -15,7 +15,7 @@ TEMPLATE_IMAGE="pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel"
 TEMPLATE_DISK_SIZE=24  # Disk size in GB
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="Dudkevich_AV_MED_NEW"
+MACHINE_NAME="Dudkevich__AV_MED_NEW"
 
 REMOTE_APP_DIR="wfs"
 

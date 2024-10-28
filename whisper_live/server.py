@@ -17,7 +17,7 @@ from whisper_live.transcriber import WhisperModel
 from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 
 class ClientManager:
@@ -317,6 +317,14 @@ class TranscriptionServer:
             raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
 
         # Create SSL context if SSL parameters are provided
+
+        if ssl_cert_file and ssl_key_file:
+            logging.info(f"SSL certificate found: {ssl_cert_file}")
+            logging.info(f"SSL key found: {ssl_key_file}")
+            logging.info(f"Server will be available at: wss://{host}:{port}")
+        else:
+            logging.info(f"SSL not configured. Server will be available at: ws://{host}:{port}")
+            
         ssl_context = None
         if ssl_cert_file and ssl_key_file:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -732,13 +740,18 @@ class ServeClientFasterWhisper(ServeClientBase):
             result (str): The result from whisper inference i.e. the list of segments.
             duration (float): Duration of the transcribed audio chunk.
         """
+        
+        segments = []
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
-            self.prepare_segments(last_segment)
+            segments = self.prepare_segments(last_segment)
         else:
             # show previous output if there is pause i.e. no output from whisper
-            self.get_previous_output()
+            segments = self.get_previous_output()
+
+        if len(segments):
+            self.send_transcription_to_client(segments)
 
 
     def speech_to_text(self):
@@ -785,7 +798,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
-    def format_segment(self, start, end, text, send_ready=False):
+    def format_segment(self, start, end, text, translate=False):
         """
         Formats a transcription segment with precise start and end times alongside the transcribed text.
 
@@ -808,13 +821,10 @@ class ServeClientFasterWhisper(ServeClientBase):
             'text': text,
         }
 
-        if send_ready:
-            item_with_translation = item.copy()
-            item_with_translation['translate'] = self.translator.get_translation(
-                                                                                text = text,
-                                                                                src_lang = self.language,
-                                                                                tgt_langs= self.all_langs)
-            self.send_transcription_to_client(item_with_translation)
+        if translate:
+            item['translate'] = self.translator.get_translation(text = text,
+                                                                src_lang = self.language,
+                                                                tgt_langs= self.all_langs)
         
         return item
 
