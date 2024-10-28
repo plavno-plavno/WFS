@@ -2,8 +2,8 @@ from whisper_live.client import TranscriptionClient
 
 client = TranscriptionClient(
     uid = 'tester',
-    host = "127.0.0.1",
-    port = 9090,
+    host = "216.144.178.146",
+    port = 45180,
     lang = "ru",
     translate=False,
     model="large-v3",

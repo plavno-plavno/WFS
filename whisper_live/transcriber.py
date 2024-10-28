@@ -751,7 +751,6 @@ class WhisperModel:
                     "beam_size": options.beam_size,
                     "patience": options.patience,
                 }
-            start_time = time.time()  # Start the ti
 
 
 
@@ -770,10 +769,6 @@ class WhisperModel:
                 **kwargs,
             )[0]
 
-
-            end_time = time.time()  # End the timer
-            execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
-            print(f"GENERATION time: {execution_time:.2f} ms")  # Print the execution time
             tokens = result.sequences_ids[0]
             # Recover the average log prob from the returned score.
             seq_len = len(tokens)

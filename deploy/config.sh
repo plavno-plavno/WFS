@@ -7,7 +7,7 @@ VAST_API_KEY="bf299128b308697749900f6b3b6c9f758b35b9a5f4a33c1c71b5fad44d237231"
 SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
 
 # Define the desired GPU type and amount
-DESIRED_GPU_TYPE="RTX_3060"  # e.g., "RTX 3090", "Tesla V100", "A100"
+DESIRED_GPU_TYPE="RTX_4080"  # e.g., "RTX 3090", "Tesla V100", "A100"
 DESIRED_GPU_AMOUNT=1
 
 # Define the template for instance creation
@@ -15,7 +15,7 @@ TEMPLATE_IMAGE="pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel"
 TEMPLATE_DISK_SIZE=24  # Disk size in GB
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="dimi"
+MACHINE_NAME="Dudkevich_AV_MED_NEW"
 
 REMOTE_APP_DIR="wfs"
 

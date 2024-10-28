@@ -4,6 +4,7 @@ import threading
 import json
 import functools
 import ssl
+import base64
 import logging
 from enum import Enum
 from typing import List, Optional
@@ -16,7 +17,7 @@ from whisper_live.transcriber import WhisperModel
 from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 
 class ClientManager:
@@ -174,18 +175,34 @@ class TranscriptionServer:
 
     def get_audio_from_websocket(self, websocket):
         """
-        Receives audio buffer from websocket and creates a numpy array out of it.
-
+        Receives audio buffer from websocket and creates a numpy array from it.
         Args:
             websocket: The websocket to receive audio from.
-
         Returns:
-            A numpy array containing the audio.
+            A numpy array containing the audio, or False in case of an error.
         """
-        frame_data = websocket.recv()
-        if frame_data == b"END_OF_AUDIO":
-            return False
-        return np.frombuffer(frame_data, dtype=np.float32)
+        data = websocket.recv()
+        if data == b"END_OF_AUDIO":
+            return False, None, None
+        try:
+            parsed_data = json.loads(data)
+            speaker_lang = parsed_data.get('speakerLang')
+            all_langs = parsed_data.get('allLangs')
+            audio_base64 = parsed_data.get('audio')
+            if audio_base64:
+                # Decode base64 to bytes
+                audio_bytes = base64.b64decode(audio_base64)
+                # Convert bytes to numpy array
+                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
+                return audio_np, speaker_lang, all_langs
+            else:
+                return False, None, None
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON Decoding Error: Unable to parse JSON data. Details: {str(e)}")
+            return False, None, None
+        except Exception as e:
+            logging.error(f"An error occurred while processing audio: {str(e)}")
+            return False, None, None
 
     def handle_new_connection(self, websocket, faster_whisper_custom_model_path):
         try:
@@ -210,11 +227,14 @@ class TranscriptionServer:
             return False
 
     def process_audio_frames(self, websocket):
-        frame_np = self.get_audio_from_websocket(websocket)
+        frame_np, speaker_lang, all_langs = self.get_audio_from_websocket(websocket)
         client = self.client_manager.get_client(websocket)
 
         if frame_np is False or frame_np is None or frame_np.size == 0:
             return False
+        
+        client.set_speaker_lang(speaker_lang)
+        client.set_all_langs(all_langs)
         client.add_frames(frame_np)
         return True
 
@@ -348,6 +368,8 @@ class ServeClientBase(object):
         self.add_pause_thresh = 3       # add a blank to segment list as a pause(no speech) for 3 seconds
         self.transcript = []
         self.send_last_n_segments = 10
+        self.all_langs = None
+        self.speaker_lang = None
 
         # text formatting
         self.pick_previous_segments = 2
@@ -363,6 +385,12 @@ class ServeClientBase(object):
 
     def handle_transcription_output(self):
         raise NotImplementedError
+    
+    def set_speaker_lang(self, speaker_lang):
+        self.speaker_lang = speaker_lang
+
+    def set_all_langs(self, all_langs):
+        self.all_langs = all_langs
 
     def add_frames(self, frame_np):
         """
@@ -650,7 +678,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         result, info = self.transcriber.transcribe(
             input_sample,
             initial_prompt=self.initial_prompt,
-            language=self.language,
+            language=self.speaker_lang if self.speaker_lang else self.language,
             task=self.task,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
@@ -665,8 +693,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
         self.execution_times.append(execution_time)  # Store the execution time
         avg_execution_time = sum(self.execution_times) / len(self.execution_times)  # Calculate average
-        print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
-        print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
+        # print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
+        # print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
 
         return result
     def get_previous_output(self):
@@ -698,23 +726,20 @@ class ServeClientFasterWhisper(ServeClientBase):
 
     def handle_transcription_output(self, result, duration):
         """
-        Handle the transcription output, updating the transcript and sending data to the client.
+        Handle the transcription output, updating the transcript.
 
         Args:
             result (str): The result from whisper inference i.e. the list of segments.
             duration (float): Duration of the transcribed audio chunk.
         """
-        segments = []
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
-            segments = self.prepare_segments(last_segment)
+            self.prepare_segments(last_segment)
         else:
             # show previous output if there is pause i.e. no output from whisper
-            segments = self.get_previous_output()
+            self.get_previous_output()
 
-        if len(segments):
-            self.send_transcription_to_client(segments)
 
     def speech_to_text(self):
         """
@@ -760,7 +785,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
-    def format_segment(self, start, end, text, translate=False):
+    def format_segment(self, start, end, text, send_ready=False):
         """
         Formats a transcription segment with precise start and end times alongside the transcribed text.
 
@@ -768,7 +793,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             start (float): The start time of the transcription segment in seconds.
             end (float): The end time of the transcription segment in seconds.
             text (str): The transcribed text corresponding to the segment.
-            translate (bool): Whether to include a translated version of the text.
+            send_ready (bool): Whether to include a translated version of the text.
 
         Returns:
             dict: A dictionary representing the formatted transcription segment, including
@@ -783,9 +808,14 @@ class ServeClientFasterWhisper(ServeClientBase):
             'text': text,
         }
 
-        if translate:
-            item['translate'] = self.translator.get_translation(text)
-
+        if send_ready:
+            item_with_translation = item.copy()
+            item_with_translation['translate'] = self.translator.get_translation(
+                                                                                text = text,
+                                                                                src_lang = self.language,
+                                                                                tgt_langs= self.all_langs)
+            self.send_transcription_to_client(item_with_translation)
+        
         return item
 
     def update_segments(self, segments, duration):

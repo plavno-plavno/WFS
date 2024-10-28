@@ -1,7 +1,7 @@
 import os
 import shutil
 import wave
-
+import base64
 import logging
 import numpy as np
 import pyaudio
@@ -106,6 +106,8 @@ class Client:
     def process_segments(self, segments):
         """Processes transcript segments."""
         text = []
+        if isinstance(segments, dict):
+            segments = [segments]
         for i, seg in enumerate(segments):
             if not text or text[-1] != seg["text"]:
                 text.append(seg["text"])
@@ -123,7 +125,7 @@ class Client:
         if self.log_transcription:
             # Truncate to last 3 entries for brevity.
             text = text[-3:]
-            utils.clear_screen()
+            # utils.clear_screen()
             utils.print_transcript(text)
 
     def on_message(self, ws, message):
@@ -173,6 +175,7 @@ class Client:
 
     def on_error(self, ws, error):
         print(f"[ERROR] WebSocket Error: {error}")
+        print(f"[DEBUG] Trying to connect to: {ws.url}")
         self.server_error = True
         self.error_message = error
 
@@ -347,7 +350,7 @@ class TranscriptionTeeClient:
         for client in self.clients:
             client.write_srt_file(client.srt_file_path)
 
-    def multicast_packet(self, packet, unconditional=False):
+    def multicast_packet(self, audio_array, speaker_lang = 'ru', all_langs = ["en"], unconditional=False):
         """
         Sends an identical packet via all clients.
 
@@ -355,9 +358,17 @@ class TranscriptionTeeClient:
             packet (bytes): The audio data packet in bytes to be sent.
             unconditional (bool, optional): If true, send regardless of whether clients are recording.  Default is False.
         """
+        audio_base64 = base64.b64encode(audio_array).decode('utf-8')
+        packet = {
+            "speakerLang": speaker_lang,
+            "allLangs": all_langs,
+            "audio": audio_base64
+        }
+
+        json_packet = json.dumps(packet)
         for client in self.clients:
             if (unconditional or client.recording):
-                client.send_packet_to_server(packet)
+                client.send_packet_to_server(json_packet)
 
     def play_file(self, filename):
         """
@@ -398,7 +409,7 @@ class TranscriptionTeeClient:
 
                 for client in self.clients:
                     client.wait_before_disconnect()
-                self.multicast_packet(Client.END_OF_AUDIO.encode('utf-8'), True)
+                self.multicast_packet(Client.END_OF_AUDIO.encode('utf-8'), unconditional=True)
                 self.write_all_clients_srt()
                 self.stream.close()
                 self.close_all_clients()
