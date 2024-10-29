@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Define paths to SSL files and optional passphrase
-SSL_CERT_FILE="/path/to/cert.pem"
-SSL_KEY_FILE="/path/to/key.pem"
+SSL_CERT_FILE="certificates/fullchain.pem"
+SSL_KEY_FILE="certificates/privkey.pem"
 SSL_PASSPHRASE="your_passphrase"  # Set this to your SSL key passphrase if needed
 
 # Determine the path to pip

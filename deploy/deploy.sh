@@ -2,7 +2,41 @@
 
 # Load configuration from config.sh
 source deploy/config.sh
+source deploy/certificates/functions.sh
 
+# Function to create an A record for the given domain on Cloudflare
+create_a_record() {
+    local domain_name=$1
+    local ip_address=$2
+
+    # Check if required Cloudflare API credentials are set
+    if [[ -z "$ZONE_ID" || -z "$CLOUDFLARE_API_KEY" ]]; then
+        echo "Error: ZONE_ID and CLOUDFLARE_API_KEY must be set."
+        return 1
+    fi
+
+    # Create the A record using Cloudflare API
+    response=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+        -d '{
+              "type": "A",
+              "name": "'"$domain_name"'",
+              "content": "'"$ip_address"'",
+              "ttl": 3600,
+              "proxied": false
+            }')
+
+    # Check if the response indicates a successful creation
+    if echo "$response" | grep -q '"success":true'; then
+        echo "A record created successfully for $domain_name with IP $ip_address."
+    else
+        echo "Failed to create A record for $domain_name."
+        echo "Response: $response"
+    fi
+}
+
+# Function to wait for an instance to be ready on Vast.ai with a timeout
 wait_for_instance_ready() {
     local instance_id=$1
     local timeout=300  # Timeout in seconds
@@ -12,20 +46,20 @@ wait_for_instance_ready() {
     echo "Waiting for instance $instance_id to be ready..."
 
     while true; do
-        # Check the instance status
+        # Check the instance status using vastai CLI
         status=$(vastai show instance "$instance_id" --raw | grep -o '"actual_status": "[^"]*' | sed 's/"actual_status": "//')
         if [ "$status" == "running" ]; then
             echo "Instance $instance_id is ready!"
             return 0
         fi
 
-        # Increment elapsed time and check if timeout is reached
+        # Check for timeout
         ((elapsed_time+=interval))
         if [ "$elapsed_time" -ge "$timeout" ]; then
             echo "Timeout reached. Instance $instance_id is not ready after $((timeout / 60)) minutes."
             echo "Destroying instance $instance_id..."
 
-            # Destroy the instance if it didn't become ready in time
+            # Attempt to destroy the instance if it didn't become ready in time
             vastai destroy instance "$instance_id"
             if [ $? -eq 0 ]; then
                 echo "Instance $instance_id has been successfully destroyed."
@@ -35,7 +69,7 @@ wait_for_instance_ready() {
             return 1
         fi
 
-        # Wait before the next check
+        # Wait before the next status check
         echo "Instance status: $status. Waiting..."
         sleep $interval
     done
@@ -50,18 +84,18 @@ if [ ! -f "$SSH_KEY_PATH" ]; then
     echo "    ssh-keygen -t rsa -b 4096 -C \"your_email@example.com\""
     echo ""
     echo "After running this command, follow the prompts to save the key as $SSH_KEY_PATH."
-    echo "Once the key is generated, add it to your SSH agent with:"
+    echo "Then add this key to your SSH agent with:"
     echo ""
     echo "    eval \$(ssh-agent -s)"
     echo "    ssh-add $SSH_KEY_PATH"
-    echo "Then add this key to Vast.ai account"
+    echo "Then add this key to your Vast.ai account."
     exit 1
 fi
 
-# Export the Vast.ai API key as an environment variable
+# Export the Vast.ai API key for use with the vastai CLI
 export VAST_API_KEY="$VAST_API_KEY"
 
-# Check if the vastai CLI is installed, install it if not
+# Check if the vastai CLI is installed; if not, install it
 if ! command -v vastai &> /dev/null; then
     echo "vastai CLI could not be found. Installing it using pip..."
     pip install --upgrade vastai
@@ -71,14 +105,14 @@ if ! command -v vastai &> /dev/null; then
     fi
 fi
 
-# Step 1: Check if an existing instance with the desired machine name is already running
+# Step 1: Check if an existing instance with the desired machine name is running
 echo "Checking for an existing instance with the machine label: $MACHINE_NAME..."
 EXISTING_INSTANCE=$(vastai show instances | grep "$MACHINE_NAME" | awk '{print $1}')
 
 if [ -n "$EXISTING_INSTANCE" ]; then
     echo "Found an existing instance with ID: $EXISTING_INSTANCE"
 
-    # Get the SSH address of the existing instance
+    # Retrieve SSH URL of the existing instance
     EXISTING_INSTANCE_IP=$(vastai ssh-url "$EXISTING_INSTANCE" --api-key "$VAST_API_KEY")
 
     if [ -z "$EXISTING_INSTANCE_IP" ]; then
@@ -88,15 +122,15 @@ if [ -n "$EXISTING_INSTANCE" ]; then
 
     echo "Existing instance SSH address: $EXISTING_INSTANCE_IP"
 
+    # Parse host and port from SSH URL
     RHOST=$(echo "$EXISTING_INSTANCE_IP" | sed -E 's#ssh://([^:]+):[0-9]+#\1#')
     RPORT=$(echo "$EXISTING_INSTANCE_IP" | sed -E 's#ssh://[^:]+:([0-9]+)#\1#')
 
-    # Step 2: Update the code on the existing instance using rsync
+    # Step 2: Update code on the existing instance using rsync
     echo "Updating code on the existing instance using rsync..."
-
     rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
 
-    # Step 3: Run the command to restart the server on the existing instance
+    # Step 3: Restart the server on the existing instance
     echo "Running command to restart the server on the existing instance..."
     ssh -i "$SSH_KEY_PATH" $EXISTING_INSTANCE_IP << EOF
         $RESTART_SERVER_COMMAND
@@ -106,81 +140,58 @@ EOF
     exit 0
 fi
 
-# Step 4: No existing instance found, create a new one
+# Step 4: No existing instance found; create a new one
 echo "No existing instance found. Creating a new instance on Vast.ai..."
 
-# Get a list of available machines with the desired GPU type
+# Get a list of available machines and select one
 echo "Fetching a list of available machines with GPU type: $DESIRED_GPU_TYPE..."
-vastai search offers "gpu_name==$DESIRED_GPU_TYPE reliability > 0.99 num_gpus=$DESIRED_GPU_AMOUNT" -o 'dlperf_usd-'  > available_machines.txt
-cat available_machines.txt
-# Select the first machine from the list
-MACHINE_ID=$(head -n 2 available_machines.txt | awk 'NR==2 {print $1}')
+vastai search offers "gpu_name==$DESIRED_GPU_TYPE reliability > 0.99 num_gpus=$DESIRED_GPU_AMOUNT" -o 'dlperf_usd-' > available_machines.txt
+MACHINE_ID=$(awk 'NR==2 {print $1}' available_machines.txt)
 
 if [ -z "$MACHINE_ID" ]; then
-    echo "No suitable machine found with GPU type: $DESIRED_GPU_TYPE. Please modify your search query or check Vast.ai."
+    echo "No suitable machine found with GPU type: $DESIRED_GPU_TYPE. Exiting."
     exit 1
 fi
 
 echo "Selected machine ID: $MACHINE_ID"
 
-# Step 5: Create an instance on the chosen machine with the specified template and machine name
-echo "Creating an instance on the chosen machine using template: $TEMPLATE_IMAGE with disk size: ${TEMPLATE_DISK_SIZE}GB..."
-INSTANCE_ID=$(vastai create instance $MACHINE_ID --image "$TEMPLATE_IMAGE" --disk $TEMPLATE_DISK_SIZE  --ssh --env '-p 22:22 -p 8080:8080  -p 8081:8081 -p 9090:9090' --label "$MACHINE_NAME" | grep -oP "'new_contract': \K\d+")
-
-if [ -z "$INSTANCE_ID" ]; then
-    echo "Failed to create an instance on the machine. Exiting."
-    exit 1
-fi
-
+# Step 5: Create and start an instance with the selected machine ID
+INSTANCE_ID=$(vastai create instance $MACHINE_ID --image "$TEMPLATE_IMAGE" --disk $TEMPLATE_DISK_SIZE --ssh --env '-p 22:22 -p 8080:8080 -p 8081:8081 -p 9090:9090' --label "$MACHINE_NAME" | grep -oP "'new_contract': \K\d+")
 echo "Instance ID created: $INSTANCE_ID"
-
-
-# Step 6: Start the instance
-echo "Starting the instance..."
 vastai start instance $INSTANCE_ID
 
-
-
-# Call the wait function
+# Step 6: Wait for the instance to be ready
 if wait_for_instance_ready "$INSTANCE_ID"; then
-    echo "Instance is now ready. Proceeding with the next steps..."
+    echo "Instance is ready. Proceeding with the next steps..."
 else
-    echo "Instance did not become ready in time. Exiting."
     exit 1
 fi
 
-sleep 5
-# Step 7: Get the SSH details for the instance
-echo "Fetching SSH details for the instance..."
+# Step 7: Fetch SSH details
 INSTANCE_IP=$(vastai ssh-url "$INSTANCE_ID" --api-key "$VAST_API_KEY")
+echo $INSTANCE_IP
 
-if [ -z "$INSTANCE_IP" ]; then
-    echo "Failed to fetch the SSH details. Exiting."
-    exit 1
-fi
+RHOST=$(echo "$INSTANCE_IP" | sed -E 's#ssh://[^@]+@([0-9.]+):[0-9]+#\1#')
+RPORT=$(echo "$INSTANCE_IP" | sed -E 's#ssh://[^@]+@[0-9.]+:([0-9]+)#\1#')
 
-echo "SSH address: $INSTANCE_IP"
-    RHOST=$(echo "$INSTANCE_IP" | sed -E 's#ssh://([^:]+):[0-9]+#\1#')
-    RPORT=$(echo "$INSTANCE_IP" | sed -E 's#ssh://[^:]+:([0-9]+)#\1#')
+echo $RHOST
+echo $RPORT
 
-# Step 8: SSH into the Docker machine and set up the environment
-echo "Setting up environment on the machine..."
+create_a_record "$FULL_SUBDOMAIN" "$RHOST"
+install_certbot
+generate_certificate "$EMAIL" "$FULL_SUBDOMAIN"
+
+# Step 8: SSH into the instance and set up the environment
 ssh -i "$SSH_KEY_PATH" $INSTANCE_IP -o StrictHostKeyChecking=no << EOF
     $SETUP_COMMAND
-    echo "presetup ready"
 EOF
 
-# Step 9: Upload the current directory to the new instance using rsync
-echo "Uploading current directory to the Docker machine on Vast.ai using rsync..."
-rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND ./*. "$RHOST:$REMOTE_APP_DIR/"
-
-
-echo "Installing dependencies"
+# Step 9: Upload code and install dependencies
+rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
 ssh -i "$SSH_KEY_PATH" $INSTANCE_IP -o StrictHostKeyChecking=no << EOF
     source ~/.bashrc
     $INSTALL_COMMAND
-    echo "Setup complete. Ready to run your code."
 EOF
 
-
-echo "Done. You can now access your Vast.ai instance using: ssh -i $SSH_KEY_PATH $INSTANCE_IP"
+echo "You can now access the instance via: ssh -i $SSH_KEY_PATH $INSTANCE_IP"
+echo "Use subdomain to access service $FULL_SUBDOMAIN"
