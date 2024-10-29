@@ -1,5 +1,5 @@
 from typing import Dict
-
+import logging
 import torch
 from hf_hub_ctranslate2 import MultiLingualTranslatorCT2fromHfHub
 from transformers import AutoTokenizer
@@ -22,18 +22,22 @@ def timer_decorator(func):
 
 class MultiLingualTranslatorLive:
     def __init__(
-            self,
-            model_name_or_path="michaelfeil/ct2fast-m2m100_1.2B",
-            device='cuda',
-            compute_type= "int8_float16",
-            tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_418M")
+        self,
+        model_name_or_path="michaelfeil/ct2fast-m2m100_1.2B",
+        device='cuda',
+        compute_type= "int8_float16",
+        tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_418M")
     ):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        
         self.model = MultiLingualTranslatorCT2fromHfHub(
             model_name_or_path=model_name_or_path,
             device=device,
             compute_type=compute_type,
             tokenizer=tokenizer
         )
+        self.logger.info("MultiLingualTranslatorLive class has been initialized successfully.")
 
     @timer_decorator
     def get_translation(self, text, src_lang="en", tgt_langs=language_abbr) -> Dict:

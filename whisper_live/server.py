@@ -146,6 +146,7 @@ class TranscriptionServer:
         self.client_manager = ClientManager()
         self.use_vad = True
         self.single_model = False
+        self.multilingual_translator =  MultiLingualTranslatorLive()
 
     def initialize_client(
         self, websocket, options, faster_whisper_custom_model_path):
@@ -165,6 +166,7 @@ class TranscriptionServer:
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
                 single_model=self.single_model,
+                multilingual_translator = self.multilingual_translator
             )
             logging.info("Running faster_whisper backend.")
 
@@ -549,8 +551,19 @@ class ServeClientFasterWhisper(ServeClientBase):
     SINGLE_MODEL = None
     SINGLE_MODEL_LOCK = threading.Lock()
 
-    def __init__(self, websocket, task="transcribe", device=None, language=None, client_uid=None, model="small.en",
-                 initial_prompt=None, vad_parameters=None, use_vad=True, single_model=False):
+    def __init__(
+        self, websocket,
+        task="transcribe",
+        device=None,
+        language=None,
+        client_uid=None,
+        model="small.en",
+        initial_prompt=None,
+        vad_parameters=None,
+        use_vad=True,
+        single_model=False,
+        multilingual_translator = None
+    ):
         """
         Initialize a ServeClient instance.
         The Whisper model is initialized based on the client's language and device availability.
@@ -568,7 +581,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket)
-        self.translator = MultiLingualTranslatorLive()
+        self.multilingual_translator = multilingual_translator
         self.execution_times=[]
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
@@ -821,8 +834,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             'text': text,
         }
 
-        if translate:
-            item['translate'] = self.translator.get_translation(text = text,
+        if translate and self.multilingual_translator:
+            item['translate'] = self.multilingual_translator.get_translation(text = text,
                                                                 src_lang = self.language,
                                                                 tgt_langs= self.all_langs)
         
