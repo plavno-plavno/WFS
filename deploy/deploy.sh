@@ -129,6 +129,7 @@ if [ -n "$EXISTING_INSTANCE" ]; then
     # Step 2: Update code on the existing instance using rsync
     echo "Updating code on the existing instance using rsync..."
     rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
+    sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $CERTIFICATE_FILES "$RHOST:$REMOTE_APP_DIR/certificates/"
 
     # Step 3: Restart the server on the existing instance
     echo "Running command to restart the server on the existing instance..."
@@ -186,8 +187,21 @@ ssh -i "$SSH_KEY_PATH" $INSTANCE_IP -o StrictHostKeyChecking=no << EOF
     $SETUP_COMMAND
 EOF
 
-# Step 9: Upload code and install dependencies
-rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
+
+sleep 5
+echo 'SENDING CERTIFICATE_FILES'
+# Step 1: Deliver certificates files to the remote app folder's certificates subdirectory
+sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $CERTIFICATE_FILES "$RHOST:$REMOTE_APP_DIR/certificates/"
+
+sleep 10
+
+echo 'SENDING COPY_FOLDERS_COMMAND'
+# Step 2: Deliver everything else to the remote app folder
+sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
+
+sleep 5
+echo 'run INSTALL_COMMAND'
+# Run the installation command on the remote server
 ssh -i "$SSH_KEY_PATH" $INSTANCE_IP -o StrictHostKeyChecking=no << EOF
     source ~/.bashrc
     $INSTALL_COMMAND

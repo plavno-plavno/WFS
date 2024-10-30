@@ -15,7 +15,7 @@ VAST_API_KEY="bf299128b308697749900f6b3b6c9f758b35b9a5f4a33c1c71b5fad44d237231"
 SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="bobrta"
+MACHINE_NAME="qbroberz"
 
 # Define the desired GPU type and amount
 DESIRED_GPU_TYPE="RTX_3060"  # e.g., "RTX 3090", "Tesla V100", "A100"
@@ -62,8 +62,11 @@ git clone --progress https://huggingface.co/Systran/faster-whisper-large-v3
 EOF
 )
 
-# Specify folders and files to copy
-COPY_FOLDERS_COMMAND="$(echo whisper_live requirements translation_tools) $(find certificates -maxdepth 1 -type f) $(find . -maxdepth 1 -type f)"
+
+# Define directories and files to copy
+CERTIFICATE_FILES=$(find certificates -maxdepth 1 -type f)
+COPY_FOLDERS_COMMAND="$(echo whisper_live requirements translation_tools) $(find . -maxdepth 1 -type f)"
+
 
 
 #install dependencies and run project
