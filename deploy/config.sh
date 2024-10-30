@@ -13,12 +13,13 @@ VAST_API_KEY="bf299128b308697749900f6b3b6c9f758b35b9a5f4a33c1c71b5fad44d237231"
 
 # Path to your SSH private key
 SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
+echo $SSH_KEY_PATH;
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="qbroberz"
+MACHINE_NAME="quadrax"
 
 # Define the desired GPU type and amount
-DESIRED_GPU_TYPE="RTX_3060"  # e.g., "RTX 3090", "Tesla V100", "A100"
+DESIRED_GPU_TYPE="RTX_4090"  # e.g., "RTX 3090", "Tesla V100", "A100"
 DESIRED_GPU_AMOUNT=1
 
 
