@@ -1,6 +1,5 @@
-from typing import Dict
 import logging
-import torch
+from typing import Dict, List
 from hf_hub_ctranslate2 import MultiLingualTranslatorCT2fromHfHub
 from transformers import AutoTokenizer
 
@@ -26,7 +25,7 @@ class MultiLingualTranslatorLive:
         model_name_or_path="michaelfeil/ct2fast-m2m100_1.2B",
         device='cuda',
         compute_type= "int8_float16",
-        tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_418M")
+        tokenizer=AutoTokenizer.from_pretrained(f"facebook/m2m100_1.2B")
     ):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
@@ -40,14 +39,29 @@ class MultiLingualTranslatorLive:
         self.logger.info("MultiLingualTranslatorLive class has been initialized successfully.")
 
     @timer_decorator
-    def get_translation(self, text, src_lang="en", tgt_langs=language_abbr) -> Dict:
-        tgt_langs = [x for x in tgt_langs if x!= src_lang]
-        len_tgt_langs = len(tgt_langs)
-        outputs = self.model.generate(
-            [text] * len_tgt_langs,
-            src_lang=[src_lang] * len_tgt_langs,
-            tgt_lang=tgt_langs
-        )
-        translations =  {lang: output for lang, output in zip(tgt_langs, outputs)}
-        translations[src_lang] = text
-        return translations
+    def get_translation(self, text: str, src_lang: str = "en", tgt_langs: List[str] = None) -> Dict[str, str]:
+        if tgt_langs is None:
+            tgt_langs = language_abbr
+
+        # Exclude source language from target languages
+        tgt_langs = [lang for lang in tgt_langs if lang != src_lang]
+
+        if not tgt_langs:
+            print("[WARNING]: No target languages specified after filtering out the source language.")
+            return {src_lang: text}
+
+        try:
+            # Generate translations for each target language
+            outputs = self.model.generate(
+                [text] * len(tgt_langs),
+                src_lang=[src_lang] * len(tgt_langs),
+                tgt_lang=tgt_langs
+            )
+            # Construct translations dictionary
+            translations = {lang: output for lang, output in zip(tgt_langs, outputs)}
+            translations[src_lang] = text  # Include original text
+            return translations
+
+        except Exception as e:
+            print(f"[ERROR]: Translation generation failed with error: {e}")
+            return {src_lang: text}  # Return original text in case of error
