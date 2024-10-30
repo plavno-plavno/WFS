@@ -158,10 +158,10 @@ class TranscriptionServer:
                 options["model"] = faster_whisper_custom_model_path
             client = ServeClientFasterWhisper(
                 websocket,
-                language=options["language"],
-                task=options["task"],
-                client_uid=options["uid"],
-                model=options["model"],
+                language=options.get('language', 'en'),
+                task=options.get('task', "transcribe"),
+                client_uid=options.get('uid', 'сlient-id-not-received'),
+                model=options.get('model', "large-v3"),
                 initial_prompt=options.get("initial_prompt"),
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
@@ -397,10 +397,12 @@ class ServeClientBase(object):
         raise NotImplementedError
     
     def set_speaker_lang(self, speaker_lang):
-        self.speaker_lang = speaker_lang
+        if speaker_lang:
+            self.speaker_lang = speaker_lang
 
     def set_all_langs(self, all_langs):
-        self.all_langs = all_langs
+        if all_langs:
+            self.all_langs = all_langs
 
     def add_frames(self, frame_np):
         """
@@ -557,7 +559,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         device=None,
         language=None,
         client_uid=None,
-        model="small.en",
+        model="large-v3",
         initial_prompt=None,
         vad_parameters=None,
         use_vad=True,

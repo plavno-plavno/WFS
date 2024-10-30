@@ -28,7 +28,7 @@ class Client:
         port=None,
         lang=None,
         translate=False,
-        model="small",
+        model="large-v3",
         srt_file_path="output.srt",
         use_vad=True,
         log_transcription=True
@@ -688,7 +688,7 @@ class TranscriptionClient(TranscriptionTeeClient):
         port,
         lang=None,
         translate=False,
-        model="small",
+        model="large-v3",
         use_vad=True,
         save_output_recording=False,
         output_recording_filename="./output_recording.wav",
