@@ -58,7 +58,7 @@ sudo apt-get update && \
 sudo apt-get install -y git-lfs && \
 sudo apt-get install lsof && \
 cd "$REMOTE_APP_DIR" && \
-git clone --progress https://huggingface.co/Systran/faster-whisper-large-v3
+git clone --depth 1 --progress https://huggingface.co/Systran/faster-whisper-large-v3
 EOF
 )
 
