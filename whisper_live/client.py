@@ -683,7 +683,6 @@ class TranscriptionClient(TranscriptionTeeClient):
     """
     def __init__(
         self,
-        uid,
         host,
         port,
         lang=None,
@@ -695,7 +694,7 @@ class TranscriptionClient(TranscriptionTeeClient):
         output_transcription_path="./output.srt",
         log_transcription=True,
     ):
-        self.client = Client(uid, host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
+        self.client = Client(host=host, port= port, lang = lang, translate=translate, model=model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
         if save_output_recording and not output_recording_filename.endswith(".wav"):
             raise ValueError(f"Please provide a valid `output_recording_filename`: {output_recording_filename}")
         if not output_transcription_path.endswith(".srt"):
