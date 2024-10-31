@@ -11,6 +11,6 @@ scipy==1.11.2
 jiwer==3.0.1
 evaluate==0.4.0
 numpy<2
-sentencepiece
-hf_hub_ctranslate2
+sentencepiece==0.2.0
+hf_hub_ctranslate2==2.13.1
 transformers==4.42.0

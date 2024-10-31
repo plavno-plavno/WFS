@@ -57,9 +57,16 @@ class MultiLingualTranslatorLive:
                 src_lang=[src_lang] * len(tgt_langs),
                 tgt_lang=tgt_langs
             )
-            # Construct translations dictionary
-            translations = {lang: output for lang, output in zip(tgt_langs, outputs)}
-            translations[src_lang] = text  # Include original text
+
+            src_word_count = len(text.split())
+            translations = {src_lang: text}
+            for lang, output in zip(tgt_langs, outputs):
+                tgt_word_count = len(output.split())
+                if tgt_word_count > src_word_count * 3:
+                    retry_output = self.model.generate([text], src_lang=[src_lang], tgt_lang=[lang])[0]
+                    translations[lang] = retry_output
+                else:
+                    translations[lang] = output
             return translations
 
         except Exception as e:
