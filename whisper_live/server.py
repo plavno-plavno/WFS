@@ -17,7 +17,7 @@ from whisper_live.transcriber import WhisperModel
 from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 class ClientManager:
@@ -838,7 +838,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         if translate and self.multilingual_translator:
             item['translate'] = self.multilingual_translator.get_translation(text = text,
-                                                                src_lang = self.language,
+                                                                src_lang = self.speaker_lang,
                                                                 tgt_langs= self.all_langs)
         
         return item
