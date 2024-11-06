@@ -7,7 +7,7 @@ import time
 from functools import wraps
 
 
-language_abbr = ["hi", "en", "ar", "de", "fr", "sw"]
+language_abbr = ["hi", "ar", "de", "fr", "sw"]
 
 def timer_decorator(func):
     @wraps(func)
@@ -44,7 +44,7 @@ class MultiLingualTranslatorLive:
             tgt_langs = language_abbr
 
         # Exclude source language from target languages
-        tgt_langs = [lang for lang in tgt_langs if lang != src_lang]
+        tgt_langs = [lang for lang in tgt_langs if lang != src_lang and lang != 'en']
 
         if not tgt_langs:
             print("[WARNING]: No target languages specified after filtering out the source language.")
