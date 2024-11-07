@@ -24,7 +24,7 @@ def timer_decorator(func):
 class MultiLingualTranslatorLive:
     def __init__(
             self,
-            model_path="madlad400-3b-ct2",
+            model_path="madlad400-3b",
             compute_type="int8_float16",
             device="cuda"
     ):
