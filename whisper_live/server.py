@@ -14,8 +14,8 @@ import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 from whisper_live.transcriber import WhisperModel
-from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
-
+#from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
+from translation_tools.madlad400.translator import MultiLingualTranslatorLive
 
 logging.basicConfig(level=logging.CRITICAL)
 
@@ -761,6 +761,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
+
             segments = self.prepare_segments(last_segment)
         else:
             # show previous output if there is pause i.e. no output from whisper
