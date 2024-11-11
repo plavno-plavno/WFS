@@ -1,10 +1,10 @@
 from whisper_live.client import TranscriptionClient
 #213.91.182.97:40223
 client = TranscriptionClient(
-    host ="127.0.0.1",
-    port = 9090,
-    lang="ru",
-    translate=False,
+    host ="172.81.127.6",
+    port = 15706,
+    lang="en",
+    translate=True,
     model="large-v3",
     use_vad=True,
     save_output_recording=False,  # Only used for microphone input, False by Default

@@ -190,9 +190,12 @@ EOF
 
 sleep 5
 echo 'SENDING CERTIFICATE_FILES'
-# Step 1: Deliver certificates files to the remote app folder's certificates subdirectory
-sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $CERTIFICATE_FILES "$RHOST:$REMOTE_APP_DIR/certificates/"
 
+# Step 0: Ensure the certificates folder exists on the remote machine
+ssh -i "$SSH_KEY_PATH" -p "$RPORT" -o StrictHostKeyChecking=no "$RHOST" "mkdir -p $REMOTE_APP_DIR/certificates"
+sleep 5
+# Step 1: Deliver certificates files to the remote app folder's certificates subdirectory
+sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" "$CERTIFICATE_FILES" "$RHOST:$REMOTE_APP_DIR/certificates/"
 sleep 10
 
 echo 'SENDING COPY_FOLDERS_COMMAND'
