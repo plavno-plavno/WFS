@@ -2,7 +2,44 @@
 
 # Load configuration from config.sh
 source deploy/config.sh
-source deploy/certificates/functions.sh
+
+
+generate_certificate() {
+    local email=$1
+    local domain=$2
+    local cloudflare_credentials_path="deploy/cloudflare.ini"
+
+    echo "Generating SSL certificate for $domain using Let's Encrypt with DNS challenge..."
+
+    # Run Certbot with DNS-01 challenge using Cloudflare API
+    sudo certbot certonly --dns-cloudflare \
+        --dns-cloudflare-credentials "$cloudflare_credentials_path" \
+        --agree-tos --no-eff-email \
+        --email "$email" \
+        -d "$domain"
+
+    if [ $? -eq 0 ]; then
+        echo "SSL certificate generated successfully for $domain."
+    else
+        echo "Failed to generate SSL certificate for $domain."
+        exit 1
+    fi
+}
+
+# Function to install Certbot on the host machine
+install_certbot() {
+    echo "Installing Certbot and Cloudflare DNS plugin on the host machine..."
+
+    sudo apt-get update
+    sudo apt-get install -y certbot python3-certbot-dns-cloudflare
+
+    if [ $? -eq 0 ]; then
+        echo "Certbot and DNS plugin installed successfully."
+    else
+        echo "Failed to install Certbot or DNS plugin."
+        exit 1
+    fi
+}
 
 # Function to create an A record for the given domain on Cloudflare
 create_a_record() {
