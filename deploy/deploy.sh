@@ -3,23 +3,27 @@
 # Load configuration from config.sh
 source deploy/config.sh
 
-
 generate_certificate() {
     local email=$1
     local domain=$2
     local cloudflare_credentials_path="deploy/cloudflare.ini"
+    local certificates_dir="certificates"  # Update this path
 
     echo "Generating SSL certificate for $domain using Let's Encrypt with DNS challenge..."
 
-    # Run Certbot with DNS-01 challenge using Cloudflare API
+    # Ensure the certificates directory exists
+    mkdir -p "$certificates_dir"
+
+    # Run Certbot with DNS-01 challenge using Cloudflare API and a deploy hook to copy the files
     sudo certbot certonly --dns-cloudflare \
         --dns-cloudflare-credentials "$cloudflare_credentials_path" \
         --agree-tos --no-eff-email \
         --email "$email" \
-        -d "$domain"
+        -d "$domain" \
+        --deploy-hook "sudo cp /etc/letsencrypt/live/$domain/* $certificates_dir/"
 
     if [ $? -eq 0 ]; then
-        echo "SSL certificate generated successfully for $domain."
+        echo "SSL certificate generated and copied to $certificates_dir successfully for $domain."
     else
         echo "Failed to generate SSL certificate for $domain."
         exit 1
