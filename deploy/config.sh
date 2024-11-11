@@ -16,7 +16,7 @@ SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
 echo $SSH_KEY_PATH;
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="khutba-stt-demo"
+MACHINE_NAME="khutba-stt-demo-madlad4002"
 
 # Define the desired GPU type and amount
 DESIRED_GPU_TYPE="RTX_4090"  # e.g., "RTX 3090", "Tesla V100", "A100"
@@ -34,9 +34,7 @@ CLOUDFLARE_API_KEY="O6m_4-d8CRQqVr9z3yJQMUtNgDEaBw6SI2anuiTd"
 
 # Define the template for instance creation
 TEMPLATE_IMAGE="pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel"
-TEMPLATE_DISK_SIZE=24  # Disk size in GB
-
-
+TEMPLATE_DISK_SIZE=22  # Disk size in GB
 
 REMOTE_APP_DIR="wfs"
 
@@ -59,16 +57,18 @@ sudo apt-get update && \
 sudo apt-get install -y git-lfs && \
 sudo apt-get install lsof && \
 cd "$REMOTE_APP_DIR" && \
-git clone --depth 1 --progress https://huggingface.co/Systran/faster-whisper-large-v3
+git clone --depth 1 --progress https://huggingface.co/Systran/faster-whisper-large-v3 && \
+rm -rf faster-whisper-large-v3/.git && \
+git clone --depth 1 --progress https://huggingface.co/santhosh/madlad400-3b-ct2 madlad400-3b && \
+rm -rf madlad400-3b/.git
 EOF
 )
 
 
 # Define directories and files to copy
 CERTIFICATE_FILES=$(find certificates -maxdepth 1 -type f)
+MADLAD_FILES=$(find madlad400-3b -type f -name '*.json')
 COPY_FOLDERS_COMMAND="$(echo whisper_live requirements translation_tools) $(find . -maxdepth 1 -type f)"
-
-
 
 #install dependencies and run project
 INSTALL_COMMAND="cd $REMOTE_APP_DIR && bash setup.sh && bash run.sh"
