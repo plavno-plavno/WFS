@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/bin/ 
 
 # Define paths to SSL files and optional passphrase
-SSL_CERT_FILE="certificates/fullchain.pem"
-SSL_KEY_FILE="certificates/privkey.pem"
-SSL_PASSPHRASE="your_passphrase"  # Set this to your SSL key passphrase if needed
+SSL_CERT_FILE="certificates/fullchain1.pem"
+SSL_KEY_FILE="certificates/privkey1.pem"
+SSL_PASSPHRASE=""  # Set this to your SSL key passphrase if needed
 
 # Determine the path to pip
 if [ -x "/opt/conda/bin/python" ]; then
