@@ -16,7 +16,7 @@ SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
 echo $SSH_KEY_PATH;
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="khutba-stt-demo-madlad4002"
+MACHINE_NAME="khutba-stt-madlad-1211"
 
 # Define the desired GPU type and amount
 DESIRED_GPU_TYPE="RTX_4090"  # e.g., "RTX 3090", "Tesla V100", "A100"
@@ -34,7 +34,7 @@ CLOUDFLARE_API_KEY="O6m_4-d8CRQqVr9z3yJQMUtNgDEaBw6SI2anuiTd"
 
 # Define the template for instance creation
 TEMPLATE_IMAGE="pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel"
-TEMPLATE_DISK_SIZE=22  # Disk size in GB
+TEMPLATE_DISK_SIZE=24  # Disk size in GB
 
 REMOTE_APP_DIR="wfs"
 
