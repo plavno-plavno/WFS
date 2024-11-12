@@ -1,9 +1,16 @@
+import json
+import logging
+import threading
+
+import numpy as np
+
+
 class ServeClientBase(object):
     RATE = 16000
     SERVER_READY = "SERVER_READY"
     DISCONNECT = "DISCONNECT"
 
-    def __init__(self, client_uid, websocket,server):
+    def __init__(self, client_uid, websocket, server):
         self.client_uid = client_uid
         self.websocket = websocket
         self.frames = b""

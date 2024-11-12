@@ -1,5 +1,12 @@
+import logging
+import os
+import threading
+import time
 import uuid
 import json
+
+from faster_whisper import WhisperModel
+import torch
 from whisper_live.serve_client_base import ServeClientBase
 
 class ServeClientFasterWhisper(ServeClientBase):
@@ -161,7 +168,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             task=self.task,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
-
+        
         if ServeClientFasterWhisper.SINGLE_MODEL:
             ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
@@ -175,7 +182,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         # print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
         # print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
 
-        return result
+        return list(result)
 
     def get_previous_output(self):
         """
@@ -300,6 +307,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         return item
 
     def update_segments(self, segments, duration):
+        print(segments)
         """
         Processes the segments from whisper. Appends all the segments to the list
         except for the last segment assuming that it is incomplete.

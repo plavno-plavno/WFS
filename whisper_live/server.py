@@ -14,11 +14,13 @@ import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 from whisper_live.client_managers import ClientManager, ListenerManager
+from whisper_live.serve_client_base import ServeClientBase
+from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
+from whisper_live.serve_listener import ServeListener
 from whisper_live.transcriber import WhisperModel
 #from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 from translation_tools.madlad400.translator import MultiLingualTranslatorLive
-from serve_client_faster_whisper import ServeClientFasterWhisper
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.INFO)
 
 
 class BackendType(Enum):
