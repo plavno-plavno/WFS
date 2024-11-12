@@ -36,7 +36,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             initial_prompt (str, optional): Prompt for whisper inference. Defaults to None.
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
-        super().__init__(client_uid, websocket)
+        super().__init__(client_uid, websocket, server)
         self.multilingual_translator = multilingual_translator
         self.server = server
         self.execution_times = []
@@ -79,6 +79,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text)
         self.trans_thread.start()
+
         self.websocket.send(
             json.dumps(
                 {

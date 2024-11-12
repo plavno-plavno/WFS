@@ -3,7 +3,7 @@ class ServeClientBase(object):
     SERVER_READY = "SERVER_READY"
     DISCONNECT = "DISCONNECT"
 
-    def __init__(self, client_uid, websocket):
+    def __init__(self, client_uid, websocket,server):
         self.client_uid = client_uid
         self.websocket = websocket
         self.frames = b""
@@ -22,6 +22,7 @@ class ServeClientBase(object):
         self.send_last_n_segments = 10
         self.all_langs = None
         self.speaker_lang = None
+        self.server = server
 
         # text formatting
         self.pick_previous_segments = 2
@@ -147,20 +148,23 @@ class ServeClientBase(object):
         """
         Sends the specified transcription segments to the client over the websocket connection.
 
-        This method formats the transcription segments into a JSON object and attempts to send
-        this object to the client. If an error occurs during the send operation, it logs the error.
+        Formats the transcription segments into a JSON object and attempts to send
+        this object to the client and to all listeners. If an error occurs, it logs the error.
 
-        Returns:
+        Args:
             segments (list): A list of transcription segments to be sent to the client.
         """
-        print(segments)
+        message = {
+            "uid": self.client_uid,
+            "segments": segments,
+        }
+
         try:
-            self.websocket.send(
-                json.dumps({
-                    "uid": self.client_uid,
-                    "segments": segments,
-                })
-            )
+            # Send to the primary client
+            self.websocket.send(json.dumps(message))
+
+            # Send to all listeners
+            self.server.listener_manager.send_message_to_all_listeners(message)
         except Exception as e:
             logging.error(f"[ERROR]: Sending data to client: {e}")
 

@@ -111,4 +111,19 @@ class ClientManager(BaseClientManager):
     pass  
 
 class ListenerManager(BaseClientManager):
-    pass
+
+    def find_clients_by_listener_uid(self, listener_uid):
+        """
+        Finds and returns all clients with the specified listener_uid field.
+
+        Args:
+            listener_uid (str): The unique identifier for the listener.
+
+        Returns:
+            List: A list of client objects with the specified listener_uid.
+        """
+        matching_clients = [
+            client for client in self.clients.values()
+            if getattr(client, "listener_uid", None) == listener_uid
+        ]
+        return matching_clients
