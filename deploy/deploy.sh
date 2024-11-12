@@ -221,8 +221,8 @@ echo $RHOST
 echo $RPORT
 
 create_a_record "$FULL_SUBDOMAIN" "$RHOST"
-install_certbot
-generate_certificate "$EMAIL" "$FULL_SUBDOMAIN"
+# install_certbot
+# generate_certificate "$EMAIL" "$FULL_SUBDOMAIN"
 
 # Step 8: SSH into the instance and set up the environment
 ssh -i "$SSH_KEY_PATH" $INSTANCE_IP -o StrictHostKeyChecking=no << EOF
