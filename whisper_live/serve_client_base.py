@@ -169,9 +169,10 @@ class ServeClientBase(object):
         try:
             # Send to the primary client
             self.websocket.send(json.dumps(message))
+            print(segments)
 
             # Send to all listeners
-            self.server.listener_manager.send_message_to_all_listeners(message)
+            self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
         except Exception as e:
             logging.error(f"[ERROR]: Sending data to client: {e}")
 

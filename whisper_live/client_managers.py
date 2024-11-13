@@ -98,6 +98,9 @@ class BaseClientManager:
         Returns:
             True if the client's connection time has exceeded the maximum limit, False otherwise.
         """
+        if not self.clients.get(websocket):
+            print("Client not found.")
+            return False
         elapsed_time = time.time() - self.start_times[websocket]
         if elapsed_time >= self.max_connection_time:
             self.clients[websocket].disconnect()
@@ -127,3 +130,19 @@ class ListenerManager(BaseClientManager):
             if getattr(client, "listener_uid", None) == listener_uid
         ]
         return matching_clients
+    
+
+    def send_message_to_all_listeners(self, message, client_uid):
+        try:
+            listeners = self.find_clients_by_listener_uid(client_uid)
+
+            if not listeners:
+                logging.info("No listeners found")
+                return
+            for listener in listeners:
+                try:
+                    listener.send_message(message)
+                except Exception as e:
+                    logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
+        except Exception as e:
+            logging.error(f"General error in send_message_to_all_listeners: {str(e)}")

@@ -307,7 +307,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         return item
 
     def update_segments(self, segments, duration):
-        print(segments)
         """
         Processes the segments from whisper. Appends all the segments to the list
         except for the last segment assuming that it is incomplete.

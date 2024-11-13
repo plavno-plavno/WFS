@@ -351,7 +351,7 @@ class TranscriptionTeeClient:
         for client in self.clients:
             client.write_srt_file(client.srt_file_path)
 
-    def multicast_packet(self, audio_array, speaker_lang = 'ar', all_langs = ["fr","no","it","ar"], unconditional=False):
+    def multicast_packet(self, audio_array, speaker_lang = 'ru', all_langs = ["fr","no","it","ar"], unconditional=False):
         """
         Sends an identical packet via all clients.
 

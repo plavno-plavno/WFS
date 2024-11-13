@@ -44,7 +44,7 @@ class MultiLingualTranslatorLive:
             tgt_langs = language_abbr
 
         # Exclude source language from target languages
-        tgt_langs = [lang for lang in tgt_langs if lang != src_lang and lang != 'en']
+        tgt_langs = [lang for lang in tgt_langs if lang != src_lang]
 
         if not tgt_langs:
             print("[WARNING]: No target languages specified after filtering out the source language.")

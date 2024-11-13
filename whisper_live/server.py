@@ -20,7 +20,7 @@ from whisper_live.serve_listener import ServeListener
 from whisper_live.transcriber import WhisperModel
 #from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
 from translation_tools.madlad400.translator import MultiLingualTranslatorLive
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 
 
 class BackendType(Enum):
@@ -101,6 +101,8 @@ class TranscriptionServer:
         data = websocket.recv()
         if data == b"END_OF_AUDIO":
             return False, None, None
+        if data == b"LISTENER":
+            return True, None, None
         try:
             parsed_data = json.loads(data)
             speaker_lang = parsed_data.get('speakerLang')
@@ -145,6 +147,8 @@ class TranscriptionServer:
 
     def process_audio_frames(self, websocket):
         frame_np, speaker_lang, all_langs = self.get_audio_from_websocket(websocket)
+        if type(frame_np) == bool and frame_np:
+            return True
         client = self.client_manager.get_client(websocket)
 
         if frame_np is False or frame_np is None or frame_np.size == 0:
@@ -185,9 +189,11 @@ class TranscriptionServer:
         """
         self.backend = backend
         if not self.handle_new_connection(websocket, faster_whisper_custom_model_path):
+            print("handle_new_connection")
             return
 
         try:
+            print("while")
             while not self.client_manager.is_client_timeout(websocket):
                 if not self.process_audio_frames(websocket):
                     break
