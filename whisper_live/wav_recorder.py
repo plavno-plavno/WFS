@@ -1,5 +1,4 @@
 import os
-import shutil
 import wave
 import threading
 import json
@@ -8,11 +7,10 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import numpy as np
 
-
 class WavRecorder:
     """
-    A class for handling audio chunks, saving them as WAV files, and uploading
-    fully recorded files to an Amazon S3 bucket asynchronously.
+    A class for handling audio chunks, saving them as a single WAV file, and uploading
+    the final recorded file to an Amazon S3 bucket asynchronously.
 
     Args:
         save_output_recording (bool): Whether to save the output recording to a file.
@@ -38,8 +36,8 @@ class WavRecorder:
         self.rate = 16000
         self.save_output_recording = save_output_recording
         self.output_recording_filename = output_recording_filename
-        self.frames = b""
-        self.n_audio_file = 0
+        self.frames = []
+        self.is_recording = False
 
         # S3 Configuration
         self.s3_bucket = s3_bucket
@@ -48,13 +46,8 @@ class WavRecorder:
         self.s3_region = s3_region
         self.s3_prefix = s3_prefix.strip('/')
 
+        # Initialize S3 client if saving is enabled
         if self.save_output_recording:
-            # Prepare a directory for saving chunks
-            if os.path.exists("chunks"):
-                shutil.rmtree("chunks")
-            os.makedirs("chunks")
-
-            # Initialize S3 client
             if not all([self.s3_bucket, self.s3_access_key, self.s3_secret_key, self.s3_region]):
                 raise ValueError("S3 credentials and bucket information must be provided when save_output_recording is True.")
             self.s3_client = boto3.client(
@@ -63,89 +56,44 @@ class WavRecorder:
                 aws_secret_access_key=self.s3_secret_key,
                 region_name=self.s3_region
             )
+            # Open the WAV file for writing
+            self.wav_file = wave.open(self.output_recording_filename, "wb")
+            self.wav_file.setnchannels(self.channels)
+            self.wav_file.setsampwidth(2)  # 16-bit audio
+            self.wav_file.setframerate(self.rate)
+            logging.info(f"Initialized WAV file {self.output_recording_filename} for recording.")
 
     def process_audio_chunk(self, audio_chunk):
         """
-        Process and save an incoming audio chunk.
+        Process and save an incoming audio chunk by writing it directly to the WAV file.
 
         Args:
             audio_chunk (bytes): The audio chunk to process.
         """
-        self.frames += audio_chunk
+        if self.save_output_recording and self.wav_file:
+            try:
+                self.wav_file.writeframes(audio_chunk)
+                logging.debug(f"Written audio chunk of size {len(audio_chunk)} bytes to {self.output_recording_filename}.")
+            except Exception as e:
+                logging.error(f"Failed to write audio chunk to WAV file: {e}")
 
-        # Save frames if they exceed the size for one chunk (e.g., 1 minute of audio)
-        if len(self.frames) > 60 * self.rate * 2:  # 2 bytes per sample
-            if self.save_output_recording:
-                self.save_chunk(self.n_audio_file)
-                self.n_audio_file += 1
-            self.frames = b""
-
-    def save_chunk(self, n_audio_file):
-        """
-        Save the current audio frames to a WAV file.
-
-        Args:
-            n_audio_file (int): The index for the WAV file.
-        """
-        file_path = f"chunks/{n_audio_file}.wav"
-        self.write_audio_frames_to_file(self.frames[:], file_path)
-        logging.info(f"Saved chunk to {file_path}")
+        # Optionally, accumulate frames in memory (if needed for other purposes)
+        self.frames.append(audio_chunk)
 
     def finalize_recording(self):
         """
-        Finalize recording by saving remaining frames and combining chunks if enabled.
-        Upload the final file to S3 if configured.
+        Finalize recording by closing the WAV file and uploading it to S3 if configured.
         """
-        if self.save_output_recording and len(self.frames):
-            self.save_chunk(self.n_audio_file)
-            self.n_audio_file += 1
-
         if self.save_output_recording:
-            self.write_output_recording(self.n_audio_file)
+            try:
+                if self.wav_file:
+                    self.wav_file.close()
+                    logging.info(f"Finalized and closed WAV file {self.output_recording_filename}.")
+            except Exception as e:
+                logging.error(f"Failed to close WAV file: {e}")
+
+            # Upload the final WAV file to S3
             self.upload_to_s3(self.output_recording_filename)
-
-    def write_audio_frames_to_file(self, frames, file_name):
-        """
-        Write audio frames to a WAV file.
-
-        Args:
-            frames (bytes): The audio frames to be written.
-            file_name (str): The name of the WAV file.
-        """
-        with wave.open(file_name, "wb") as wavfile:
-            wavfile.setnchannels(self.channels)
-            wavfile.setsampwidth(2)  # 16-bit audio
-            wavfile.setframerate(self.rate)
-            wavfile.writeframes(frames)
-
-    def write_output_recording(self, n_audio_file):
-        """
-        Combine all saved chunks into a single WAV file.
-
-        Args:
-            n_audio_file (int): The number of chunks to combine.
-        """
-        input_files = [
-            f"chunks/{i}.wav" for i in range(n_audio_file) if os.path.exists(f"chunks/{i}.wav")
-        ]
-        with wave.open(self.output_recording_filename, "wb") as wavfile:
-            wavfile.setnchannels(self.channels)
-            wavfile.setsampwidth(2)
-            wavfile.setframerate(self.rate)
-            for in_file in input_files:
-                with wave.open(in_file, "rb") as wav_in:
-                    while True:
-                        data = wav_in.readframes(self.chunk_size)
-                        if data == b"":
-                            break
-                        wavfile.writeframes(data)
-                os.remove(in_file)
-                logging.info(f"Combined and removed chunk {in_file}")
-        logging.info(f"Final recording saved to {self.output_recording_filename}")
-
-        # Clean up temporary directory to store chunks
-        if os.path.exists("chunks"):
-            shutil.rmtree("chunks")
 
     def upload_to_s3(self, file_path):
         """
@@ -187,4 +135,13 @@ class WavRecorder:
         raw_data = np.frombuffer(buffer=audio_bytes, dtype=np.int16)
         return raw_data.astype(np.float32) / 32768.0
 
-
+    def __del__(self):
+        """
+        Destructor to ensure the WAV file is closed properly if not already done.
+        """
+        if self.save_output_recording and self.wav_file:
+            try:
+                self.wav_file.close()
+                logging.info(f"Closed WAV file {self.output_recording_filename} in destructor.")
+            except Exception as e:
+                logging.error(f"Failed to close WAV file in destructor: {e}")
