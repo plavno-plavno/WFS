@@ -60,6 +60,7 @@ class TranscriptionServer:
                 listener_uid=options.get('listener_uid', ''),
             )
             self.listener_manager.add_client(websocket, listener)
+            
             logging.info("Initialized listener.")
             return  # Exit function to avoid client initialization for listeners
 
@@ -273,5 +274,6 @@ class TranscriptionServer:
         """
         if self.client_manager.get_client(websocket):
             self.client_manager.remove_client(websocket)
+            self.listener_manager.remove_listener_clients(websocket)
 
 

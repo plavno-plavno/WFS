@@ -146,3 +146,38 @@ class ListenerManager(BaseClientManager):
                     logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
         except Exception as e:
             logging.error(f"General error in send_message_to_all_listeners: {str(e)}")
+
+    def remove_listener_clients(self, websocket):
+        """
+        Removes all listener clients associated with a specific client_uid
+        Args:
+            websocket: The websocket from which we get the client_uid
+        """
+        try:
+            client = self.get_client(websocket)
+            if not client:
+                logging.warning("Client not found for the given websocket. Unable to remove listener clients.")
+                return
+
+            client_uid = getattr(client, "client_uid", None)
+            if not client_uid:
+                logging.warning(f"No client_uid found for client associated with websocket. Unable to remove listener clients.")
+                return
+
+            listeners = self.find_clients_by_listener_uid(client_uid)
+            if not listeners:
+                logging.info(f"No listener clients found for client_uid: {client_uid}")
+                return
+
+            removed_count = 0
+            for listener in listeners:
+                for ws, client in list(self.clients.items()):
+                    if client == listener:
+                        self.remove_client(ws)
+                        removed_count += 1
+            
+            logging.info(f"Successfully removed {removed_count} listener client(s) for client_uid: {client_uid}")
+
+        except Exception as e:
+            logging.error(f"Error in remove_listener_clients: {str(e)}")
+            logging.exception("Full traceback:")
