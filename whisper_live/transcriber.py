@@ -36,6 +36,7 @@ class Segment(NamedTuple):
     start: float
     end: float
     text: str
+    text_en: str
     tokens: List[int]
     temperature: float
     avg_logprob: float
@@ -418,7 +419,42 @@ class WhisperModel:
             language="en",
         )
 
-        segments = self.generate_segments(features, tokenizer, options, encoder_output)
+        tokenizer_en = Tokenizer(
+            self.hf_tokenizer,
+            True,
+            task="transcribe",
+            language="en",
+        )
+        options_en = TranscriptionOptions(
+            beam_size=beam_size,
+            best_of=best_of,
+            patience=patience,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            log_prob_threshold=log_prob_threshold,
+            no_speech_threshold=no_speech_threshold,
+            compression_ratio_threshold=compression_ratio_threshold,
+            condition_on_previous_text=condition_on_previous_text,
+            prompt_reset_on_temperature=prompt_reset_on_temperature,
+            temperatures=(
+                temperature if isinstance(temperature, (list, tuple)) else [temperature]
+            ),
+            initial_prompt=initial_prompt,
+            prefix=prefix,
+            suppress_blank=suppress_blank,
+            suppress_tokens=get_suppressed_tokens(tokenizer_en, suppress_tokens),
+            without_timestamps=without_timestamps,
+            max_initial_timestamp=max_initial_timestamp,
+            word_timestamps=word_timestamps,
+            prepend_punctuations=prepend_punctuations,
+            append_punctuations=append_punctuations,
+            max_new_tokens=max_new_tokens,
+            clip_timestamps=clip_timestamps,
+            hallucination_silence_threshold=hallucination_silence_threshold,
+            hotwords=hotwords,
+        )
+        segments = self.generate_segments(features, tokenizer, options, options_en, encoder_output)
 
         if speech_chunks:
             segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)
@@ -439,6 +475,7 @@ class WhisperModel:
         features: np.ndarray,
         tokenizer: Tokenizer,
         options: TranscriptionOptions,
+        options_en:TranscriptionOptions,
         encoder_output: Optional[ctranslate2.StorageView] = None,
     ) -> Iterable[Segment]:
         content_frames = features.shape[-1] - \
@@ -538,6 +575,26 @@ class WhisperModel:
                 temperature,
                 compression_ratio,
             ) = self.generate_with_fallback(encoder_output, prompt, tokenizer, options)
+
+            tokenizer_en = Tokenizer(
+                self.hf_tokenizer,
+                True,
+                task="translate",
+                language="en",
+            )
+            prompt_en = self.get_prompt(
+                tokenizer_en,
+                previous_tokens,
+                without_timestamps=options_en.without_timestamps,
+                prefix=options_en.prefix if seek == 0 else None,
+                hotwords=options_en.hotwords,
+            )
+            (
+                result_en,
+                avg_logprob1,
+                temperature1,
+                compression_ratio1,
+            ) = self.generate_with_fallback(encoder_output, prompt_en, tokenizer_en, options_en)
 
             if options.no_speech_threshold is not None:
                 # no voice activity check
@@ -667,6 +724,9 @@ class WhisperModel:
                 tokens = segment["tokens"]
                 text = tokenizer.decode(tokens)
 
+                tokens_en = result_en.sequences_ids[0]
+                text_en = tokenizer_en.decode(tokens_en)
+
                 if segment["start"] == segment["end"] or not text.strip():
                     continue
 
@@ -679,6 +739,7 @@ class WhisperModel:
                     start=segment["start"],
                     end=segment["end"],
                     text=text,
+                    text_en=text_en,
                     tokens=tokens,
                     temperature=temperature,
                     avg_logprob=avg_logprob,

@@ -5,7 +5,7 @@ import time
 import uuid
 import json
 
-from faster_whisper import WhisperModel
+from whisper_live.transcriber import WhisperModel
 import torch
 from whisper_live.serve_client_base import ServeClientBase
 
@@ -182,7 +182,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         # print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
         # print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
 
-        return list(result)
+        return result
 
     def get_previous_output(self):
         """
@@ -277,7 +277,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
-    def format_segment(self, start, end, text, translate=False):
+    def format_segment(self, start, end, text, text_en, translate=False):
         """
         Formats a transcription segment with precise start and end times alongside the transcribed text.
 
@@ -297,12 +297,14 @@ class ServeClientFasterWhisper(ServeClientBase):
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
             'text': text,
+            'text_en': text_en
         }
 
         if translate and self.multilingual_translator:
             item['translate'] = self.multilingual_translator.get_translation(text=text,
                                                                              src_lang=self.speaker_lang,
                                                                              tgt_langs=self.all_langs)
+            item['translate']["en"] = text_en
 
         return item
 
@@ -329,11 +331,13 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         offset = None
         self.current_out = ''
+        self.current_out_en = ''
         last_segment = None
         # process complete segments
         if len(segments) > 1:
             for i, s in enumerate(segments[:-1]):
                 text_ = s.text
+                text_en = s.text_en
                 self.text.append(text_)
                 start, end = self.timestamp_offset + s.start, self.timestamp_offset + min(duration, s.end)
 
@@ -343,16 +347,19 @@ class ServeClientFasterWhisper(ServeClientBase):
                     continue
 
                 self.transcript.append(self.format_segment(start, end, text_, True))
+                self.transcript.append(self.format_segment(start, end, text_, text_en, True))
                 offset = min(duration, s.end)
 
         # only process the segments if it satisfies the no_speech_thresh
         if segments[-1].no_speech_prob <= self.no_speech_thresh:
             self.current_out += segments[-1].text
+            self.current_out_en += segments[-1].text_en
 
             last_segment = self.format_segment(
                 self.timestamp_offset + segments[-1].start,
                 self.timestamp_offset + min(duration, segments[-1].end),
-                self.current_out
+                self.current_out,
+                self.current_out_en
             )
 
         # if same incomplete segment is seen multiple times then update the offset
@@ -369,6 +376,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                     self.timestamp_offset,
                     self.timestamp_offset + duration,
                     self.current_out,
+                    self.current_out_en,
                     True
                 ))
             self.current_out = ''
