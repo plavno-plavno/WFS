@@ -167,10 +167,12 @@ class ServeClientBase(object):
         }
 
         try:
+            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
             print(segments)
 
+            #print(segments[-1])
             # Send to all listeners
             self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
         except Exception as e:

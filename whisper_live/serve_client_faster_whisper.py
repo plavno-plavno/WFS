@@ -60,7 +60,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.initial_prompt = initial_prompt
         self.vad_parameters = vad_parameters or {"threshold": 0.5}
         self.no_speech_thresh = 0.45
-
+        self.call_count = 0  # Счётчик вызовов функции
+        self.accumulated_text = []  # Для накопления текста
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if device == "cuda":
             major, _ = torch.cuda.get_device_capability(device)
@@ -276,33 +277,46 @@ class ServeClientFasterWhisper(ServeClientBase):
             except Exception as e:
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
-
+    
     def format_segment(self, start, end, text, translate=False):
         """
-        Formats a transcription segment with precise start and end times alongside the transcribed text.
+        Форматирует сегмент транскрипции с точным временем начала и конца, а также текстом.
+        Перевод выполняется после накопления текста каждые три вызова функции.
 
         Args:
-            start (float): The start time of the transcription segment in seconds.
-            end (float): The end time of the transcription segment in seconds.
-            text (str): The transcribed text corresponding to the segment.
-            send_ready (bool): Whether to include a translated version of the text.
+            start (float): Время начала сегмента в секундах.
+            end (float): Время конца сегмента в секундах.
+            text (str): Текст транскрипции, соответствующий сегменту.
+            translate (bool): Нужно ли включить перевод текста.
 
         Returns:
-            dict: A dictionary representing the formatted transcription segment, including
-                'start' and 'end' times as strings with three decimal places and the 'text'
-                of the transcription. Optionally, it may include 'translate' if translateItem is True.
+            dict: Словарь, представляющий форматированный сегмент транскрипции, включающий
+                'start', 'end', 'text'. После каждых трёх вызовов добавляется 'translate' с переводом.
         """
+        if translate:
+        # Увеличиваем счётчик вызовов
+            self.call_count += 1
 
+        # Добавляем текст в накопитель
+            self.accumulated_text.append(text)
+
+        # Формируем базовый элемент
         item = {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
             'text': text,
         }
 
-        if translate and self.multilingual_translator:
-            item['translate'] = self.multilingual_translator.get_translation(text=text,
-                                                                             src_lang=self.speaker_lang,
-                                                                             tgt_langs=self.all_langs)
+        # Если это третий вызов, выполняем перевод
+        if translate and self.call_count % 2 == 0 and self.multilingual_translator:
+            combined_text = " ".join(self.accumulated_text)  # Объединяем накопленные тексты
+            translation = self.multilingual_translator.get_translation(
+                text=combined_text,
+                src_lang=self.speaker_lang,
+                tgt_langs=self.all_langs
+            )
+            item['translate'] = translation  # Добавляем перевод
+            self.accumulated_text = []  # Очищаем накопленный текст
 
         return item
 
@@ -352,7 +366,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             last_segment = self.format_segment(
                 self.timestamp_offset + segments[-1].start,
                 self.timestamp_offset + min(duration, segments[-1].end),
-                self.current_out,
+                self.current_out
             )
 
         # if same incomplete segment is seen multiple times then update the offset

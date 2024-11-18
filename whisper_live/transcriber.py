@@ -411,6 +411,7 @@ class WhisperModel:
             hotwords=hotwords,
         )
 
+
         segments = self.generate_segments(features, tokenizer, options, encoder_output)
 
         if speech_chunks:
@@ -531,6 +532,7 @@ class WhisperModel:
                 temperature,
                 compression_ratio,
             ) = self.generate_with_fallback(encoder_output, prompt, tokenizer, options)
+
 
             if options.no_speech_threshold is not None:
                 # no voice activity check
