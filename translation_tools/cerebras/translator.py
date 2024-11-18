@@ -29,13 +29,13 @@ def retry_on_error(max_retries: int = 3, retry_delay: float = 0.25):
                 try:
                     result = func(*args, **kwargs)
                     try:
-                        # Using json5 for more tolerant JSON parsing
-                        parsed_result = json5.loads(result)
+                        # Using standard json instead of json5
+                        parsed_result = json.loads(result)
                         if isinstance(parsed_result, dict) and "translate" in parsed_result:
                             return parsed_result
                         else:
                             raise ValueError("Invalid response structure")
-                    except json5.JSONDecodeError as e:
+                    except json.JSONDecodeError as e:
                         print(f"Attempt {attempt + 1}: JSON parsing error: {e}")
                         if attempt == max_retries - 1:
                             raise Exception("Failed to get valid translation after all attempts")
@@ -135,3 +135,19 @@ class CerebrasTranslator:
         
         # Text to translate: {text}
         # """
+
+
+
+#context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
+
+# Important rules:
+# 1. Return strict JSON format with ISO 2-letter language codes
+# 2. Keep exact structure as in example
+# 3. Maintain original meaning without additions
+# 4. Include all specified target languages
+# 5. Use previous context only for reference: {self.buffer_text}
+
+# Example response (strictly follow this format):
+# {example_response}
+
+# Text to translate: {text}"""
