@@ -59,50 +59,26 @@ class CerebrasTranslator:
     @retry_on_error(max_retries=3, retry_delay=0.25)
     def get_translation(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
         if tgt_langs is None:
-            tgt_langs = ["en", "ru", "es", "zh", "ar", "my", "nl", "fi", "de", "hi", "id", "kn", "ms", "no", "ps", "ur", "fa"]
+            tgt_langs = ["en", "fa", "ur", "ru", "no", "ar"]
             
         example_response = '''{
             "translate": {
                 "en": "Why is fast inference important?",
-                "ru": "Почему важен быстрый вывод?",
-                "es": "¿Por qué es importante la inferencia rápida?",
-                "zh": "为什么快速推理很重要？",
-                "ar": "لماذا الاستدلال السريع مهم؟",
-                "my": "အမြန်ကောက်ချက်ချခြင်းသည် အဘယ်ကြောင့် အရေးကြီးသနည်း။",
-                "nl": "Waarom is snelle inferentie belangrijk?",
-                "fi": "Miksi nopea päättely on tärkeää?",
-                "de": "Warum ist schnelle Inferenz wichtig?",
-                "hi": "तेज़ अनुमान क्यों महत्वपूर्ण है?",
-                "id": "Mengapa inferensi cepat penting?",
-                "kn": "ವೇಗದ ಅನುಮಾನ ಏಕೆ ಮುಖ್ಯವಾಗಿದೆ?",
-                "ms": "Mengapa inferens cepat penting?",
-                "no": "Hvorfor er rask inferens viktig?",
-                "ps": "ولې چټک استنباط مهم دی؟",
+                "fa": "چرا استنتاج سریع مهم است؟",
                 "ur": "تیز استدلال کیوں اہم ہے؟",
-                "fa": "چرا استنتاج سریع مهم است؟"
+                "ru": "Почему важен быстрый вывод?",
+                "no": "Hvorfor er rask inferens viktig?",
+                "ar": "لماذا الاستدلال السريع مهم؟"
             }
         }'''
 
-        context = f"""You are an expert translator with deep knowledge of cultural context and linguistic nuances. 
-        Your task is to translate the following text from {src_lang} to the following languages: {', '.join(tgt_langs)}.
+        context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
+        Return strict JSON with ISO 2-letter language codes. Previous context: {self.buffer_text}
 
-        Important translation guidelines:
-        1. Maintain literal translation where possible as the text might be part of a larger context
-        2. Use the previous context ({self.buffer_text}) to maintain consistency in translation
-        3. Pay special attention to the original text structure and word order when possible
-        4. Avoid over-interpretation or excessive localization
-        5. Keep the translation as close to the source text as grammatically acceptable
-        6. Consider that this might be a part of an ongoing conversation or larger text
-        7. Use previous translations as reference for terminology consistency
-        8. Preserve any special terms, numbers, or proper names exactly as they appear
-
-        Previous context for better translation (if any): {self.buffer_text}
-        
-        Example response:
+        Example:
         {example_response}
-        
-        Text to translate: {text}
-        """
+
+        Text: {text}"""
 
         completion = self.client.chat.completions.create(
             messages=[
@@ -121,10 +97,41 @@ class CerebrasTranslator:
         # Update buffer with current text for context
         self.buffer_text = text
 
-        
-
         return completion.choices[0].message.content
     
 
-print(CerebrasTranslator().get_translation("دبي مدينة ساحرة بناطحات سحاب شاهقة وشواطئ ذهبية وتسوق فاخر ومعالم رائعة."))
 
+
+
+        # context = f"""You are an expert translator with deep knowledge of cultural context and linguistic nuances. 
+        # Your task is to translate the following text from {src_lang} to the following languages: {', '.join(tgt_langs)}.
+
+        # Important translation guidelines:
+        # 1. Maintain literal translation where possible as the text might be part of a larger context
+        # 2. Use the previous context ({self.buffer_text}) cautiously, only for general background information, not for direct translation
+        # 3. Pay special attention to the original text structure and word order when possible
+        # 4. Avoid over-interpretation or excessive localization
+        # 5. Keep the translation as close to the source text as grammatically acceptable
+        # 6. Consider that this might be a part of an ongoing conversation or larger text
+        # 7. Use previous translations as reference for terminology consistency
+        # 8. Preserve any special terms, numbers, or proper names exactly as they appear
+        # 9. Do not attempt to anticipate or guess upcoming parts of the text
+        # 10. Translate as closely to the original text as possible, even if it seems incomplete
+        # 11. Return exactly the number of translation elements specified in tgt_langs plus src_lang
+
+        # Important rules:
+        # 1. Maintain the original meaning and tone
+        # 2. Consider cultural context
+        # 3. Keep any special terms or proper names unchanged
+        # 4. Return only raw text without any markdown
+        # 5. Provide translations in JSON format
+        # 6. Do not add or omit any information not present in the original text
+        # 7. Use the previous context very carefully, only for understanding, not for adding content
+
+        # Previous context for better translation (if any): {self.buffer_text}
+        
+        # Example response:
+        # {example_response}
+        
+        # Text to translate: {text}
+        # """

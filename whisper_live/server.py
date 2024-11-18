@@ -13,13 +13,15 @@ import torch
 import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
+
 from whisper_live.client_managers import ClientManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
 
 #from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
-from translation_tools.madlad400.translator import MultiLingualTranslatorLive
+# from translation_tools.madlad400.translator import MultiLingualTranslatorLive
+from translation_tools.cerebras.translator import CerebrasTranslator
 logging.basicConfig(level=logging.ERROR)
 
 
@@ -47,7 +49,7 @@ class TranscriptionServer:
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-        self.multilingual_translator =  MultiLingualTranslatorLive()
+        self.multilingual_translator =  CerebrasTranslator()
 
     def initialize_client(
             self, websocket, options, faster_whisper_custom_model_path):

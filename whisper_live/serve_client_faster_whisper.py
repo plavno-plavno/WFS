@@ -315,7 +315,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 src_lang=self.speaker_lang,
                 tgt_langs=self.all_langs
             )
-            item['translate'] = translation  # Добавляем перевод
+            item['translate'] = translation.get('translate', {})  # Добавляем перевод
             self.accumulated_text = []  # Очищаем накопленный текст
 
         return item
