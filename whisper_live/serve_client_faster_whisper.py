@@ -2,7 +2,6 @@ import logging
 import os
 import threading
 import time
-import uuid
 import json
 
 from whisper_live.transcriber import WhisperModel
@@ -97,6 +96,15 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             )
         )
+    def check_punctuation_mark(self, text, language):
+        rtl_languages = ["ar", "fa", "ur", "he"]
+        is_rtl = language in rtl_languages
+        if is_rtl:
+            return text.startswith((".", "?", "!", "؟", "۔"))
+        else:
+            return text.endswith((".", "?", "!", "؟", "۔"))
+
+
 
     def create_model(self, device):
         """
@@ -179,9 +187,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         end_time = time.time()  # End the timer
         execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
         self.execution_times.append(execution_time)  # Store the execution time
-        avg_execution_time = sum(self.execution_times) / len(self.execution_times)  # Calculate average
-        # print(f"Execution time: {execution_time:.2f} ms")  # Print the execution time
-        # print(f"Average execution time: {avg_execution_time:.2f} ms")  # Print average execution time
 
         return result
 
@@ -277,8 +282,14 @@ class ServeClientFasterWhisper(ServeClientBase):
             except Exception as e:
                 logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
+
+    def remove_until_dot(self, text):
+        dot_index = text.find('.')
+        if dot_index < len(text) - 1 and dot_index != -1:
+            return text[dot_index + 1:]
+        return text
     
-    def format_segment(self, start, end, text, translate=False):
+    def format_segment(self, start, end, text: str, translate=False):
         """
         Форматирует сегмент транскрипции с точным временем начала и конца, а также текстом.
         Перевод выполняется после накопления текста каждые три вызова функции.
@@ -293,9 +304,15 @@ class ServeClientFasterWhisper(ServeClientBase):
             dict: Словарь, представляющий форматированный сегмент транскрипции, включающий
                 'start', 'end', 'text'. После каждых трёх вызовов добавляется 'translate' с переводом.
         """
+
+        
         if translate:
         # Увеличиваем счётчик вызовов
             self.call_count += 1
+            if text.strip()[0].islower():
+                text = self.remove_until_dot(text)
+            if self.check_punctuation_mark(text, self.speaker_lang):
+                self.call_count = 0
 
         # Добавляем текст в накопитель
             self.accumulated_text.append(text)
@@ -309,14 +326,31 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         # Если это третий вызов, выполняем перевод
         if translate and self.call_count % 2 == 0 and self.multilingual_translator:
-            combined_text = " ".join(self.accumulated_text)  # Объединяем накопленные тексты
+            print("==========================================================")
+            if len(self.accumulated_text) == 2:
+                text1 = ' '.join(self.accumulated_text[0].lower().split()).strip()
+                text2 = ' '.join(self.accumulated_text[1].lower().split()).strip()
+                
+                if text2.startswith(text1):
+                    self.accumulated_text = [self.accumulated_text[1]]
+
+                elif text1.endswith(text2):
+
+                    self.accumulated_text = [self.accumulated_text[0]]
+
+            combined_text = " ".join(self.accumulated_text)
             translation = self.multilingual_translator.get_translation(
                 text=combined_text,
                 src_lang=self.speaker_lang,
                 tgt_langs=self.all_langs
             )
-            item['translate'] = translation.get('translate', {})  # Добавляем перевод
+            item['translate'] = translation.get('translate', {}) # Добавляем перевод
+            item['translate'][self.speaker_lang] = combined_text
+
+            print(f"AR - {combined_text}")
+            print(f"EN - {item['translate'].get('en')}")
             self.accumulated_text = []  # Очищаем накопленный текст
+
 
         return item
 
@@ -355,7 +389,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                     continue
                 if s.no_speech_prob > self.no_speech_thresh:
                     continue
-
                 self.transcript.append(self.format_segment(start, end, text_, True))
                 offset = min(duration, s.end)
 

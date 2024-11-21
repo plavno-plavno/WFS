@@ -1,7 +1,4 @@
 from typing import List, Dict
-import json5
-
-import os
 import time
 from typing import Dict, Callable, Any
 import json
@@ -16,34 +13,43 @@ def timer_decorator(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print(f"[DEBUG]: Execution time for {func.__name__}: {end_time - start_time:.2f} seconds")
+        # print(f"[DEBUG]: Execution time for {func.__name__}: {end_time - start_time:.2f} seconds")
         return result
 
     return wrapper
 
-def retry_on_error(max_retries: int = 3, retry_delay: float = 0.25):
+def retry_on_error(max_retries: int = 5, retry_delay: float = 0.00):
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             for attempt in range(max_retries):
                 try:
                     result = func(*args, **kwargs)
-                    try:
-                        # Using standard json instead of json5
-                        parsed_result = json.loads(result)
-                        if isinstance(parsed_result, dict) and "translate" in parsed_result:
+                    
+                    # Проверяем, является ли результат строкой JSON
+                    if isinstance(result, str):
+                        try:
+                            parsed_result = json.loads(result)
+                        except json.JSONDecodeError:
+                            raise ValueError("Invalid JSON response")
+                    else:
+                        parsed_result = result
+
+                    # Проверяем структуру ответа
+                    if isinstance(parsed_result, dict):
+                        if "translate" in parsed_result:
                             return parsed_result
-                        else:
-                            raise ValueError("Invalid response structure")
-                    except json.JSONDecodeError as e:
-                        print(f"Attempt {attempt + 1}: JSON parsing error: {e}")
-                        if attempt == max_retries - 1:
-                            raise Exception("Failed to get valid translation after all attempts")
+                        elif "error" in parsed_result:
+                            raise ValueError(f"API error: {parsed_result['error']}")
+                    
+                    raise ValueError("Invalid response structure")
+
                 except Exception as e:
                     print(f"Attempt {attempt + 1}: An error occurred: {e}")
                     if attempt == max_retries - 1:
                         raise Exception(f"Failed to get translation after {max_retries} attempts: {str(e)}")
                 time.sleep(retry_delay)
+            
             raise Exception("Unexpected error in translation process")
         return wrapper
     return decorator
@@ -54,12 +60,12 @@ class CerebrasTranslator:
             # This is the default and can be omitted
             api_key="csk-wdpk43pkx2n439jc9c8pf9wy5vrhtje6c8pyfcyvy9x3jnhc"
         )
-        self.buffer_text = ""
+        self.buffer_text = []
     @timer_decorator
     @retry_on_error(max_retries=3, retry_delay=0.25)
     def get_translation(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
-        if tgt_langs is None:
-            tgt_langs = ["en", "fa", "ur", "ru", "no", "ar"]
+        # if tgt_langs is None:
+        tgt_langs = ["en", "fa", "ur", "ru", "no", "ar"]
             
         example_response = '''{
             "translate": {
@@ -71,14 +77,20 @@ class CerebrasTranslator:
                 "ar": "لماذا الاستدلال السريع مهم؟"
             }
         }'''
-
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
-        Return strict JSON with ISO 2-letter language codes. Previous context: {self.buffer_text}
 
-        Example:
+        Important rules:
+        1. Return strict JSON format with ISO 2-letter language codes
+        2. Keep exact structure as in example
+        3. Maintain original meaning without additions
+        4. Include all specified target languages
+        5. Use previous context only for reference: {" ".join(self.buffer_text)}
+
+        Example response (strictly follow this format):
         {example_response}
 
-        Text: {text}"""
+        Text to translate: {text}"""
+
 
         completion = self.client.chat.completions.create(
             messages=[
@@ -91,11 +103,16 @@ class CerebrasTranslator:
                     "content": text
                 }
             ],
-            model="llama3.1-8b",
+            model="llama3.1-70b",
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            top_p=0.1,
         )
 
         # Update buffer with current text for context
-        self.buffer_text = text
+        self.buffer_text.append(text)
+        if len(self.buffer_text) > 3:
+           self.buffer_text.pop(0)
 
         return completion.choices[0].message.content
     
@@ -138,16 +155,13 @@ class CerebrasTranslator:
 
 
 
-#context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
 
-# Important rules:
-# 1. Return strict JSON format with ISO 2-letter language codes
-# 2. Keep exact structure as in example
-# 3. Maintain original meaning without additions
-# 4. Include all specified target languages
-# 5. Use previous context only for reference: {self.buffer_text}
 
-# Example response (strictly follow this format):
-# {example_response}
 
-# Text to translate: {text}"""
+        # context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
+        # Return strict JSON with ISO 2-letter language codes. Previous context: {self.buffer_text}
+
+        # Example:
+        # {example_response}
+
+        # Text: {text}"""

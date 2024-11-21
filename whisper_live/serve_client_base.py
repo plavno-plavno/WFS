@@ -170,7 +170,6 @@ class ServeClientBase(object):
             
             # Send to the primary client
             self.websocket.send(json.dumps(message))
-            print(segments)
 
             #print(segments[-1])
             # Send to all listeners

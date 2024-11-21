@@ -20,7 +20,8 @@ class ServeListener:
         try:
             self.websocket.send(json.dumps(message))
         except Exception as e:
-            print(f"Failed to send message: {e}")
+            # print(f"Failed to send message: {e}")
+            pass
 
     def send_ready_message(self):
         """
