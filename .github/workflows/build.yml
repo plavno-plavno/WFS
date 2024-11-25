@@ -19,7 +19,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: faster-whisper-large-v3
-          key: faster-whisper-large-v3-${{ runner.os }}-${{ hashFiles('') }}
+          key: faster-whisper-large-v3
 
     # Step 1.2: Clone the systran/faster-whisper repository
       - name: Clone faster-whisper-large-v3 repository
