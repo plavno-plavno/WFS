@@ -26,6 +26,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://huggingface.co/Systran/faster-whisper-large-v3 faster-whisper-large-v3
+          rm -rf faster-whisper-large-v3/.git
 
       # Step 2: Log in to Docker Hub
       - name: Log in to Docker Hub
@@ -45,6 +46,6 @@ jobs:
           context: .
           file: docker/Dockerfile.gpu
           push: true
-          tags: abiatop/wfs:dev
+          tags: abiatop/wfs:${{ github.sha }}
           platforms: linux/amd64
 
