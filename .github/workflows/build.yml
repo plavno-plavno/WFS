@@ -14,8 +14,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-    # Step 1.1: Clone the systran/faster-whisper repository
-      - name: Clone faster-whisper repository
+     # Step 1.1: Cache the faster-whisper-large-v3 repository
+      - name: Cache faster-whisper-large-v3 repository
+        uses: actions/cache@v3
+        with:
+          path: faster-whisper-large-v3
+          key: faster-whisper-large-v3-${{ runner.os }}-${{ hashFiles('') }}
+
+    # Step 1.2: Clone the systran/faster-whisper repository
+      - name: Clone faster-whisper-large-v3 repository
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://huggingface.co/Systran/faster-whisper-large-v3 faster-whisper-large-v3
 
