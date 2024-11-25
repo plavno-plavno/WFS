@@ -45,6 +45,6 @@ jobs:
           context: .
           file: docker/Dockerfile.gpu
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wfs:dev
+          tags: abiatop/wfs:dev
           platforms: linux/amd64
 
