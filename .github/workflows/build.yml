@@ -25,7 +25,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Step 4: Build and push Docker image
+      # Step 4: Build and push Docker image with caching
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -35,3 +35,6 @@ jobs:
           # Use the GitHub release tag for the Docker image tag
           tags: abiatop/wfs:${{ github.event.release.tag_name }}
           platforms: linux/amd64
+          # Configure caching
+          cache-from: type=registry,ref=abiatop/wfs:cache
+          cache-to: type=registry,ref=abiatop/wfs:cache,mode=max
