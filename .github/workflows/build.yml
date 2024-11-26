@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: wfs-build-machine
+    runs-on: [self-hosted, wfs-build-machine]
     steps:
       # Step 1: Check out the repository code
       - name: Checkout code
