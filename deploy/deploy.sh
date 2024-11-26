@@ -245,8 +245,8 @@ echo 'SENDING COPY_FOLDERS_COMMAND'
 sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
 
 
-echo 'SENDING MADLAD_FILES'
-sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $MADLAD_FILES "$RHOST:$REMOTE_APP_DIR/madlad400-3b/"
+#echo 'SENDING MADLAD_FILES'
+#sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $MADLAD_FILES "$RHOST:$REMOTE_APP_DIR/madlad400-3b/"
 
 sleep 5
 echo 'run INSTALL_COMMAND'
