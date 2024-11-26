@@ -3,7 +3,7 @@ import logging
 import time
 
 
-class BaseClientManager:
+class ClientManager:
     def __init__(self, max_clients=4, max_connection_time=72000):
         """
         Initializes the ClientManager with specified limits on client connections and connection durations.
@@ -109,11 +109,12 @@ class BaseClientManager:
         return False
 
 
-class ClientManager(BaseClientManager):
+class SpeakerManager(ClientManager):
 
-    pass  
+    pass
 
-class ListenerManager(BaseClientManager):
+
+class ListenerManager(ClientManager):
 
     def find_clients_by_listener_uid(self, listener_uid):
         """
@@ -131,7 +132,7 @@ class ListenerManager(BaseClientManager):
         ]
         return matching_clients
     
-
+    
     def send_message_to_all_listeners(self, message, client_uid):
         try:
             listeners = self.find_clients_by_listener_uid(client_uid)
@@ -139,45 +140,26 @@ class ListenerManager(BaseClientManager):
             if not listeners:
                 logging.info("No listeners found")
                 return
+
+            inactive_listeners = []
+
             for listener in listeners:
                 try:
+                    if not listener.is_connected():
+                        inactive_listeners.append(listener.websocket)
+                        continue
+
                     listener.send_message(message)
                 except Exception as e:
                     logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
-        except Exception as e:
-            logging.error(f"General error in send_message_to_all_listeners: {str(e)}")
+                    inactive_listeners.append(listener.websocket)
 
-    def remove_listener_clients(self, websocket):
-        """
-        Removes all listener clients associated with a specific client_uid
-        Args:
-            websocket: The websocket from which we get the client_uid
-        """
-        try:
-            client = self.get_client(websocket)
-            if not client:
-                logging.warning("Client not found for the given websocket. Unable to remove listener clients.")
-                return
-
-            client_uid = getattr(client, "client_uid", None)
-            if not client_uid:
-                logging.warning(f"No client_uid found for client associated with websocket. Unable to remove listener clients.")
-                return
-
-            listeners = self.find_clients_by_listener_uid(client_uid)
-            if not listeners:
-                logging.info(f"No listener clients found for client_uid: {client_uid}")
-                return
-
-            removed_count = 0
-            for listener in listeners:
-                for ws, client in list(self.clients.items()):
-                    if client == listener:
-                        self.remove_client(ws)
-                        removed_count += 1
-            
-            logging.info(f"Successfully removed {removed_count} listener client(s) for client_uid: {client_uid}")
+            for websocket in inactive_listeners:
+                self.remove_client(websocket)
+                logging.info(
+                    f"Removed inactive listener with websocket {websocket}")
 
         except Exception as e:
-            logging.error(f"Error in remove_listener_clients: {str(e)}")
-            logging.exception("Full traceback:")
+            logging.error(
+                f"General error in send_message_to_all_listeners: {str(e)}")
+

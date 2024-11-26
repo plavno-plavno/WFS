@@ -1,6 +1,4 @@
 import os
-import time
-import threading
 import json
 import functools
 import ssl
@@ -9,18 +7,16 @@ import logging
 from enum import Enum
 from typing import List, Optional
 
-import torch
 import numpy as np
+
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from whisper_live.client_managers import ClientManager, ListenerManager
+from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
 
-#from translation_tools.ct2fast_m2m100.translator import MultiLingualTranslatorLive
-# from translation_tools.madlad400.translator import MultiLingualTranslatorLive
 from translation_tools.cerebras.translator import CerebrasTranslator
 logging.basicConfig(level=logging.ERROR)
 
@@ -45,11 +41,11 @@ class TranscriptionServer:
     RATE = 16000
 
     def __init__(self):
-        self.client_manager = ClientManager()
+        self.speaker_manager = SpeakerManager()
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-        self.multilingual_translator =  CerebrasTranslator()
+        self.translator =  CerebrasTranslator()
 
     def initialize_client(
             self, websocket, options, faster_whisper_custom_model_path):
@@ -83,7 +79,7 @@ class TranscriptionServer:
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
                 single_model=self.single_model,
-                multilingual_translator=self.multilingual_translator,
+                translator=self.translator,
                 server=self
             )
             logging.info("Running faster_whisper backend.")
@@ -91,7 +87,7 @@ class TranscriptionServer:
         if client is None:
             raise ValueError(f"Backend type {self.backend.value} not recognized or not handled.")
 
-        self.client_manager.add_client(websocket, client)
+        self.speaker_manager.add_client(websocket, client)
 
     def get_audio_from_websocket(self, websocket):
         """
@@ -132,7 +128,7 @@ class TranscriptionServer:
             options = websocket.recv()
             options = json.loads(options)
             self.use_vad = options.get('use_vad')
-            if self.client_manager.is_server_full(websocket, options):
+            if self.speaker_manager.is_server_full(websocket, options):
                 websocket.close()
                 return False  # Indicates that the connection should not continue
             
@@ -152,7 +148,7 @@ class TranscriptionServer:
         frame_np, speaker_lang, all_langs = self.get_audio_from_websocket(websocket)
         if type(frame_np) == bool and frame_np:
             return True
-        client = self.client_manager.get_client(websocket)
+        client = self.speaker_manager.get_client(websocket)
 
         if frame_np is False or frame_np is None or frame_np.size == 0:
             return False
@@ -195,7 +191,7 @@ class TranscriptionServer:
             return
 
         try:
-            while not self.client_manager.is_client_timeout(websocket):
+            while not self.speaker_manager.is_client_timeout(websocket):
                 if not self.process_audio_frames(websocket):
                     break
         except ConnectionClosed:
@@ -203,7 +199,7 @@ class TranscriptionServer:
         except Exception as e:
             logging.error(f"Unexpected error: {str(e)}")
         finally:
-            if self.client_manager.get_client(websocket):
+            if self.speaker_manager.get_client(websocket):
                 self.cleanup(websocket)
                 websocket.close()
             del websocket
@@ -211,7 +207,7 @@ class TranscriptionServer:
     def run(self,
             host,
             port=9090,
-            backend="tensorrt",
+            backend="faster_whisper",
             faster_whisper_custom_model_path=None,
             single_model=False,
             ssl_cert_file=None,
@@ -274,8 +270,5 @@ class TranscriptionServer:
         Args:
             websocket: The websocket associated with the client to be cleaned up.
         """
-        if self.client_manager.get_client(websocket):
-            self.client_manager.remove_client(websocket)
-            self.listener_manager.remove_listener_clients(websocket)
-
-
+        if self.speaker_manager.get_client(websocket):
+            self.speaker_manager.remove_client(websocket)

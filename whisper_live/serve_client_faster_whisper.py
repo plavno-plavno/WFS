@@ -23,7 +23,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             vad_parameters=None,
             use_vad=True,
             single_model=False,
-            multilingual_translator=None,
+            translator=None,
             server=None
     ):
         """
@@ -43,9 +43,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket, server)
-        self.multilingual_translator = multilingual_translator
+        self.translator = translator
         self.server = server
-        self.execution_times = []
         self.model_sizes = [
             "tiny", "tiny.en", "base", "base.en", "small", "small.en",
             "medium", "medium.en", "large-v2", "large-v3",
@@ -59,8 +58,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.initial_prompt = initial_prompt
         self.vad_parameters = vad_parameters or {"threshold": 0.5}
         self.no_speech_thresh = 0.45
-        self.call_count = 0  # Счётчик вызовов функции
-        self.accumulated_text = []  # Для накопления текста
+        self.call_count = 0
+        self.accumulated_text = []
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if device == "cuda":
             major, _ = torch.cuda.get_device_capability(device)
@@ -183,11 +182,6 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         if self.language is None and info is not None:
             self.set_language(info)
-
-        end_time = time.time()  # End the timer
-        execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
-        self.execution_times.append(execution_time)  # Store the execution time
-
         return result
 
     def get_previous_output(self):
@@ -291,42 +285,34 @@ class ServeClientFasterWhisper(ServeClientBase):
     
     def format_segment(self, start, end, text: str, translate=False):
         """
-        Форматирует сегмент транскрипции с точным временем начала и конца, а также текстом.
-        Перевод выполняется после накопления текста каждые три вызова функции.
-
+        Formats a transcription segment with precise start and end times, along with the text.
+        Translation is performed after accumulating text every two calls to the function.
         Args:
-            start (float): Время начала сегмента в секундах.
-            end (float): Время конца сегмента в секундах.
-            text (str): Текст транскрипции, соответствующий сегменту.
-            translate (bool): Нужно ли включить перевод текста.
-
+            start (float): Start time of the segment in seconds.
+            end (float): End time of the segment in seconds.
+            text (str): Transcription text corresponding to the segment.
+            translate (bool): Whether to include translation of the text.
         Returns:
-            dict: Словарь, представляющий форматированный сегмент транскрипции, включающий
-                'start', 'end', 'text'. После каждых трёх вызовов добавляется 'translate' с переводом.
+            dict: A dictionary representing the formatted transcription segment, including
+                'start', 'end', 'text'. After every two calls, 'translate' with translation is added.
         """
 
         
         if translate:
-        # Увеличиваем счётчик вызовов
             self.call_count += 1
             if text.strip()[0].islower():
                 text = self.remove_until_dot(text)
             if self.check_punctuation_mark(text, self.speaker_lang):
                 self.call_count = 0
-
-        # Добавляем текст в накопитель
             self.accumulated_text.append(text)
 
-        # Формируем базовый элемент
         item = {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
             'text': text,
         }
 
-        # Если это третий вызов, выполняем перевод
-        if translate and self.call_count % 2 == 0 and self.multilingual_translator:
-            print("==========================================================")
+        if translate and self.call_count % 2 == 0 and self.translator:
             if len(self.accumulated_text) == 2:
                 text1 = ' '.join(self.accumulated_text[0].lower().split()).strip()
                 text2 = ' '.join(self.accumulated_text[1].lower().split()).strip()
@@ -339,17 +325,19 @@ class ServeClientFasterWhisper(ServeClientBase):
                     self.accumulated_text = [self.accumulated_text[0]]
 
             combined_text = " ".join(self.accumulated_text)
-            translation = self.multilingual_translator.get_translation(
+            translation = self.translator.get_translation(
                 text=combined_text,
                 src_lang=self.speaker_lang,
                 tgt_langs=self.all_langs
             )
-            item['translate'] = translation.get('translate', {}) # Добавляем перевод
+
+            item['translate'] = translation.get('translate', {})
             item['translate'][self.speaker_lang] = combined_text
 
-            print(f"AR - {combined_text}")
-            print(f"EN - {item['translate'].get('en')}")
-            self.accumulated_text = []  # Очищаем накопленный текст
+            print("==========================================================")
+            for lang, translated_text in item['translate'].items():
+                print(f"{lang.upper()} - {translated_text}")
+            self.accumulated_text = []
 
 
         return item
