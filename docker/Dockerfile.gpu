@@ -19,6 +19,7 @@ WORKDIR /app
 # install the requirements for running the whisper-live server
 COPY requirements /app/requirements
 COPY translation_tools /app/translation_tools
+COPY certificates /app/certificates
 COPY *.sh /app/
 
 RUN chmod +x /app/*.sh
@@ -31,4 +32,4 @@ ENV LD_LIBRARY_PATH="/usr/local/lib/python3.10/site-packages/nvidia/cublas/lib:/
 COPY whisper_live /app/whisper_live
 COPY run_server.py /app
 
-CMD ["bash", "runc.sh"]
+CMD ["bash", "run.sh"]
