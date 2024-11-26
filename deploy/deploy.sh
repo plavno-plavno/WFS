@@ -171,8 +171,6 @@ if [ -n "$EXISTING_INSTANCE" ]; then
     echo "Updating code on the existing instance using rsync..."
     rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
     sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $CERTIFICATE_FILES "$RHOST:$REMOTE_APP_DIR/certificates/"
-    sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $MADLAD_FILES "$RHOST:$REMOTE_APP_DIR/madlad400-3b/"
-
     # Step 3: Restart the server on the existing instance
     echo "Running command to restart the server on the existing instance..."
     ssh -i "$SSH_KEY_PATH" $EXISTING_INSTANCE_IP << EOF
@@ -244,9 +242,6 @@ echo 'SENDING COPY_FOLDERS_COMMAND'
 # Step 2: Deliver everything else to the remote app folder
 sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $COPY_FOLDERS_COMMAND "$RHOST:$REMOTE_APP_DIR/"
 
-
-#echo 'SENDING MADLAD_FILES'
-#sudo rsync -avz -e "ssh -i $SSH_KEY_PATH -p $RPORT -o StrictHostKeyChecking=no" $MADLAD_FILES "$RHOST:$REMOTE_APP_DIR/madlad400-3b/"
 
 sleep 5
 echo 'run INSTALL_COMMAND'

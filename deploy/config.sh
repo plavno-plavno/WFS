@@ -60,15 +60,12 @@ sudo apt-get install lsof && \
 cd "$REMOTE_APP_DIR" && \
 git clone --depth 1 --progress https://huggingface.co/Systran/faster-whisper-large-v3 && \
 rm -rf faster-whisper-large-v3/.git && \
-git clone --depth 1 --progress https://huggingface.co/santhosh/madlad400-3b-ct2 madlad400-3b && \
-rm -rf madlad400-3b/.git
 EOF
 )
 
 
 # Define directories and files to copy
 CERTIFICATE_FILES=$(find certificates -maxdepth 1 -type f)
-MADLAD_FILES=$(find madlad400-3b -type f -name '*.json')
 COPY_FOLDERS_COMMAND="$(echo whisper_live requirements translation_tools) $(find . -maxdepth 1 -type f)"
 
 #install dependencies and run project
