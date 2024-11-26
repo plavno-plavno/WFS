@@ -19,7 +19,6 @@ WORKDIR /app
 # install the requirements for running the whisper-live server
 COPY requirements /app/requirements
 COPY translation_tools /app/translation_tools
-COPY faster-whisper-large-v3 /app/faster-whisper-large-v3
 COPY *.sh /app/
 
 RUN chmod +x /app/*.sh
