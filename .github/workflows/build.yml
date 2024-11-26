@@ -1,12 +1,13 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches:
-      - deploy
+  release:
+    types:
+      - published
 
 jobs:
   build-and-push:
+    if: github.event.release.target_commitish == 'deploy'
     runs-on: self-hosted
     steps:
       # Step 1: Check out the repository code
@@ -31,5 +32,6 @@ jobs:
           context: .
           file: docker/Dockerfile.gpu
           push: true
-          tags: abiatop/wfs:${{ github.sha }}
+          # Use the GitHub release tag for the Docker image tag
+          tags: abiatop/wfs:${{ github.event.release.tag_name }}
           platforms: linux/amd64
