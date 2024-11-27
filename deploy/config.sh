@@ -10,6 +10,7 @@ clean_domain_name() {
 # Set your Vast.ai API key
 VAST_API_KEY="bf299128b308697749900f6b3b6c9f758b35b9a5f4a33c1c71b5fad44d237231"
 
+export VAST_API_KEY
 
 # Path to your SSH private key
 SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
