@@ -17,7 +17,7 @@ SSH_KEY_PATH="$HOME/.ssh/rsa_vast"
 echo $SSH_KEY_PATH;
 
 # Define the machine name to check for or assign to new instances
-MACHINE_NAME="khutba-stt-cerebras-2111"
+MACHINE_NAME="khutba-stt-cerebras-2911b"
 
 # Define the desired GPU type and amount
 DESIRED_GPU_TYPE="RTX_4090"  # e.g., "RTX 3090", "Tesla V100", "A100"
