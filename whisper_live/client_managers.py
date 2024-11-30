@@ -99,7 +99,6 @@ class ClientManager:
             True if the client's connection time has exceeded the maximum limit, False otherwise.
         """
         if not self.clients.get(websocket):
-            print("Client not found.")
             return False
         elapsed_time = time.time() - self.start_times[websocket]
         if elapsed_time >= self.max_connection_time:
@@ -141,23 +140,12 @@ class ListenerManager(ClientManager):
                 logging.info("No listeners found")
                 return
 
-            inactive_listeners = []
-
             for listener in listeners:
                 try:
-                    if not listener.is_connected():
-                        inactive_listeners.append(listener.websocket)
-                        continue
-
-                    listener.send_message(message)
+                    listener.websocket.send(json.dumps(message))
                 except Exception as e:
-                    logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
-                    inactive_listeners.append(listener.websocket)
-
-            for websocket in inactive_listeners:
-                self.remove_client(websocket)
-                logging.info(
-                    f"Removed inactive listener with websocket {websocket}")
+                    logging.INFO(f"Error sending message to listener {listener.client_uid}: {str(e)}")
+                    self.remove_client(listener.websocket)
 
         except Exception as e:
             logging.error(

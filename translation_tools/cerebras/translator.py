@@ -167,7 +167,7 @@ class CerebrasTranslator:
         }
         return json.dumps(response, ensure_ascii=False, indent=4)
 
-    def split_into_chunks(self, array, chunk_size=5):
+    def split_into_chunks(self, array, chunk_size=30):
         return [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
 
     @timer_decorator
