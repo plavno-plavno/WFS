@@ -1,5 +1,8 @@
 import argparse
 import os
+import logging
+
+logging.basicConfig(level=logging.ERROR)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -46,7 +49,6 @@ if __name__ == "__main__":
         port=args.port,
         backend=args.backend,
         faster_whisper_custom_model_path=args.faster_whisper_custom_model_path,
-        single_model=not args.no_single_model,
         ssl_key_file=ssl_key_file,
         ssl_cert_file=ssl_cert_file,
         ssl_passphrase=ssl_passphrase  # Include this line if passphrase is also needed

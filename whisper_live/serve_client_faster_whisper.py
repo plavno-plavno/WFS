@@ -4,26 +4,22 @@ import threading
 import time
 import json
 
-from whisper_live.transcriber import WhisperModel
-import torch
 from whisper_live.serve_client_base import ServeClientBase
 
 class ServeClientFasterWhisper(ServeClientBase):
-    SINGLE_MODEL = None
     SINGLE_MODEL_LOCK = threading.Lock()
 
     def __init__(
             self, websocket,
             task="transcribe",
-            device=None,
             language=None,
             client_uid=None,
             model="large-v3",
             initial_prompt=None,
             vad_parameters=None,
             use_vad=True,
-            single_model=False,
             translator=None,
+            transcriber=None,
             server=None
     ):
         """
@@ -40,46 +36,18 @@ class ServeClientFasterWhisper(ServeClientBase):
             client_uid (str, optional): A unique identifier for the client. Defaults to None.
             model (str, optional): The whisper model size. Defaults to 'small.en'
             initial_prompt (str, optional): Prompt for whisper inference. Defaults to None.
-            single_model (bool, optional): Whether to instantiate a new model for each client connection. Defaults to False.
         """
         super().__init__(client_uid, websocket, server)
         self.translator = translator
+        self.transcriber = transcriber
         self.server = server
-        self.model_sizes = [
-            "tiny", "tiny.en", "base", "base.en", "small", "small.en",
-            "medium", "medium.en", "large-v2", "large-v3",
-        ]
-        if not os.path.exists(model):
-            self.model_size_or_path = self.check_valid_model(model)
-        else:
-            self.model_size_or_path = model
-        self.language = "en" if self.model_size_or_path.endswith("en") else language
+        self.language = language
         self.task = task
         self.initial_prompt = initial_prompt
         self.vad_parameters = vad_parameters or {"threshold": 0.5}
         self.no_speech_thresh = 0.45
         self.call_count = 0
         self.accumulated_text = []
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        if device == "cuda":
-            major, _ = torch.cuda.get_device_capability(device)
-            self.compute_type = "float16" if major >= 7 else "float32"
-        else:
-            self.compute_type = "int8"
-
-        if self.model_size_or_path is None:
-            return
-        logging.info(f"Using Device={device} with precision {self.compute_type}")
-
-        if single_model:
-            if ServeClientFasterWhisper.SINGLE_MODEL is None:
-                self.create_model(device)
-                ServeClientFasterWhisper.SINGLE_MODEL = self.transcriber
-            else:
-                self.transcriber = ServeClientFasterWhisper.SINGLE_MODEL
-        else:
-            self.create_model(device)
-
         self.use_vad = use_vad
 
         # threading
@@ -103,18 +71,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         else:
             return text.endswith((".", "?", "!", "؟", "۔"))
 
-
-
-    def create_model(self, device):
-        """
-        Instantiates a new model, sets it as the transcriber.
-        """
-        self.transcriber = WhisperModel(
-            self.model_size_or_path,
-            device=device,
-            compute_type=self.compute_type,
-            local_files_only=False,
-        )
 
     def check_valid_model(self, model_size):
         """
@@ -164,10 +120,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             The transcription result from the transcriber.
         """
 
-        start_time = time.time()  # Start the timer
-
-        if ServeClientFasterWhisper.SINGLE_MODEL:
-            ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
+        ServeClientFasterWhisper.SINGLE_MODEL_LOCK.acquire()
 
         result, info = self.transcriber.transcribe(
             input_sample,
@@ -176,9 +129,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             task=self.task,
             vad_filter=self.use_vad,
             vad_parameters=self.vad_parameters if self.use_vad else None)
-        
-        if ServeClientFasterWhisper.SINGLE_MODEL:
-            ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
+
+        ServeClientFasterWhisper.SINGLE_MODEL_LOCK.release()
 
         if self.language is None and info is not None:
             self.set_language(info)
@@ -300,32 +252,33 @@ class ServeClientFasterWhisper(ServeClientBase):
         
         if translate:
             self.call_count += 1
-            if text.strip()[0].islower():
-                text = self.remove_until_dot(text)
-            if self.check_punctuation_mark(text, self.speaker_lang):
-                self.call_count = 0
-            self.accumulated_text.append(text)
+#            if text.strip()[0].islower():
+#                text = self.remove_until_dot(text)
+#            if self.check_punctuation_mark(text, self.speaker_lang):
+#                self.call_count = 0
+#            self.accumulated_text.append(text)
 
         item = {
             'start': "{:.3f}".format(start),
             'end': "{:.3f}".format(end),
             'text': text,
         }
-
-        if translate and self.call_count % 2 == 0 and self.translator:
-            if len(self.accumulated_text) == 2:
-                text1 = ' '.join(self.accumulated_text[0].lower().split()).strip()
-                text2 = ' '.join(self.accumulated_text[1].lower().split()).strip()
+        combined_text=text
+#        if translate and self.call_count % 2 == 0 and self.translator:
+#            if len(self.accumulated_text) == 2:
+#                text1 = ' '.join(self.accumulated_text[0].lower().split()).strip()
+#                text2 = ' '.join(self.accumulated_text[1].lower().split()).strip()
                 
-                if text2.startswith(text1):
-                    self.accumulated_text = [self.accumulated_text[1]]
+#                if text2.startswith(text1):
+#                    self.accumulated_text = [self.accumulated_text[1]]
 
-                elif text1.endswith(text2):
+#                elif text1.endswith(text2):
 
-                    self.accumulated_text = [self.accumulated_text[0]]
+#                    self.accumulated_text = [self.accumulated_text[0]]
 
-            combined_text = " ".join(self.accumulated_text)
-            translation = self.translator.get_translation(
+#            combined_text = " ".join(self.accumulated_text)
+        if translate:
+            translation = self.translator.get_translations(
                 text=combined_text,
                 src_lang=self.speaker_lang,
                 tgt_langs=self.all_langs
@@ -336,7 +289,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             print("==========================================================")
             for lang, translated_text in item['translate'].items():
-                print(f"{lang.upper()} - {translated_text}")
+               print(f"{lang.upper()} - {translated_text}")
             self.accumulated_text = []
 
 

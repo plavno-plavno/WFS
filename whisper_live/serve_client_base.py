@@ -23,8 +23,8 @@ class ServeClientBase(object):
         self.t_start = None
         self.exit = False
         self.same_output_threshold = 0
-        self.show_prev_out_thresh = 5  # if pause(no output from whisper) show previous output for 5 seconds
-        self.add_pause_thresh = 3  # add a blank to segment list as a pause(no speech) for 3 seconds
+        self.show_prev_out_thresh = 4  # if pause(no output from whisper) show previous output for 5 seconds
+        self.add_pause_thresh = 2  # add a blank to segment list as a pause(no speech) for 3 seconds
         self.transcript = []
         self.send_last_n_segments = 10
         self.all_langs = None
@@ -164,18 +164,26 @@ class ServeClientBase(object):
         message = {
             "uid": self.client_uid,
             "segments": segments,
-        }
+        }        
+                
 
-        try:
-            
+        try:            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
-
-            #print(segments[-1])
+            
             # Send to all listeners
             self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
+        
         except Exception as e:
-            logging.error(f"[ERROR]: Sending data to client: {e}")
+            logging.error('[ERROR SEND TO IMAM AND CLIENT]')    
+            client = self.server.speaker_manager.get_client(self.websocket)
+            if client and not isinstance(client, bool):
+                print('Trying to CLEAN UP')
+                client.cleanup()                
+            else:
+               print('Client is not in a clients array anymore')
+
+            
 
     def disconnect(self):
         """

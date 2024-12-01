@@ -14,6 +14,15 @@ FW_FILES=(
     "vocabulary.json"
 )
 
+MADLAD_BASE_URL="https://huggingface.co/santhosh/madlad400-3b-ct2/resolve/main"
+MADLAD_DIR="madlad400-3b"
+MADLAD_FILES=(
+    "model.bin"
+    "config.json"
+    "shared_vocabulary.json"
+)
+
+
 # Function to ensure the directory exists and download missing files
 ensure_fw_files() {
     local dir="$1"
@@ -40,7 +49,7 @@ ensure_fw_files() {
 
 # Call the function to ensure faster-whisper-large-v3 files are available
 ensure_fw_files "$FW_DIR" "$BASE_URL" "${FW_FILES[@]}"
-
+ensure_fw_files "$MADLAD_DIR" "$MADLAD_BASE_URL" "${MADLAD_FILES[@]}"
 
 # Determine the path to pip
 if [ -x "/opt/conda/bin/pip" ]; then

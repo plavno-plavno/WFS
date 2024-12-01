@@ -15,3 +15,4 @@ sentencepiece==0.2.0
 hf_hub_ctranslate2==2.13.1
 transformers==4.42.0
 cerebras_cloud_sdk
+groq

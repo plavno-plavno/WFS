@@ -4,21 +4,24 @@ import functools
 import ssl
 import base64
 import logging
+import torch
 from enum import Enum
 from typing import List, Optional
+from whisper_live.transcriber import WhisperModel
 
 import numpy as np
 
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from translation_tools.utils import LoadBalancedTranslator
+#from translation_tools.utils import LoadBalancedTranslator
 from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
+from translation_tools.madlad400.translator import MultiLingualTranslatorLive
 
-logging.basicConfig(level=logging.INFO)
+
 
 
 class BackendType(Enum):
@@ -41,14 +44,16 @@ class TranscriptionServer:
     RATE = 16000
 
     def __init__(self):
+        self.transcriber = None
         self.speaker_manager = SpeakerManager()
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-        self.translator =  LoadBalancedTranslator()
+       #self.translator =  LoadBalancedTranslator()
+        self.translator =  MultiLingualTranslatorLive()
+       
 
-    def initialize_client(
-            self, websocket, options, faster_whisper_custom_model_path):
+    def initialize_client(self, websocket, options):
 
         if options.get("listener_uid"):
             # Initialize listener if 'is_listener' is set in options
@@ -62,14 +67,11 @@ class TranscriptionServer:
             logging.info("Initialized listener.")
             return  # Exit function to avoid client initialization for listeners
 
+
         # Initialize client if 'is_listener' is not set
         client: Optional[ServeClientBase] = None
-        if self.backend.is_faster_whisper():
-            if faster_whisper_custom_model_path and os.path.exists(faster_whisper_custom_model_path):
-                logging.info(f"Using custom model {faster_whisper_custom_model_path}")
-                options["model"] = faster_whisper_custom_model_path
 
-            client = ServeClientFasterWhisper(
+        client = ServeClientFasterWhisper(
                 websocket,
                 language=options.get('language', 'en'),
                 task=options.get('task', "transcribe"),
@@ -78,11 +80,11 @@ class TranscriptionServer:
                 initial_prompt=options.get("initial_prompt"),
                 vad_parameters=options.get("vad_parameters"),
                 use_vad=self.use_vad,
-                single_model=self.single_model,
                 translator=self.translator,
+                transcriber=self.transcriber,
                 server=self
             )
-            logging.info("Running faster_whisper backend.")
+        logging.info("Running faster_whisper backend.")
 
         if client is None:
             raise ValueError(f"Backend type {self.backend.value} not recognized or not handled.")
@@ -122,7 +124,7 @@ class TranscriptionServer:
             logging.error(f"An error occurred while processing audio: {str(e)}")
             return False, None, None
 
-    def handle_new_connection(self, websocket, faster_whisper_custom_model_path):
+    def handle_new_connection(self, websocket):
         try:
             logging.info("New client connected")
             options = websocket.recv()
@@ -132,7 +134,7 @@ class TranscriptionServer:
                 websocket.close()
                 return False  # Indicates that the connection should not continue
             
-            self.initialize_client(websocket, options, faster_whisper_custom_model_path)
+            self.initialize_client(websocket, options)
             return True
         except json.JSONDecodeError:
             logging.error("Failed to decode JSON from client")
@@ -160,9 +162,7 @@ class TranscriptionServer:
 
     def recv_audio(
         self,
-        websocket,
-        backend: BackendType = BackendType.FASTER_WHISPER,
-        faster_whisper_custom_model_path=None):
+        websocket):
         """
         Receive audio chunks from a client in an infinite loop.
 
@@ -186,8 +186,7 @@ class TranscriptionServer:
         Raises:
             Exception: If there is an error during the audio frame processing.
         """
-        self.backend = backend
-        if not self.handle_new_connection(websocket, faster_whisper_custom_model_path):
+        if not self.handle_new_connection(websocket):
             return
 
         try:
@@ -204,12 +203,51 @@ class TranscriptionServer:
                 websocket.close()
             del websocket
 
+    def configure_ssl(self, ssl_cert_file, ssl_key_file, ssl_passphrase):
+        """
+        Configure the SSL context based on the provided certificate and key files.
+
+        Args:
+            ssl_cert_file (str): Path to the SSL certificate file.
+            ssl_key_file (str): Path to the SSL key file.
+            ssl_passphrase (str): Optional passphrase for the SSL key.
+
+        Returns:
+            ssl_context: A configured SSL context or None if SSL is not configured.
+        """
+        ssl_context = None
+        if ssl_cert_file and ssl_key_file:
+            logging.info(f"SSL certificate found: {ssl_cert_file}")
+            logging.info(f"SSL key found: {ssl_key_file}")
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(certfile=ssl_cert_file, keyfile=ssl_key_file, password=ssl_passphrase)
+        return ssl_context
+
+    def create_model(self,model_size_or_path):
+        """
+        Instantiates a new model, sets it as the transcriber.
+        """
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if device == "cuda":
+            major, _ = torch.cuda.get_device_capability(device)
+            compute_type = "float16" if major >= 7 else "float32"
+        else:
+            compute_type = "int8"
+
+        logging.info(f"Using Device={device} with precision {compute_type}")
+        self.transcriber = WhisperModel(
+            model_size_or_path,
+            device=device,
+            compute_type=compute_type,
+            local_files_only=False,
+        )
+
     def run(self,
             host,
             port=9090,
             backend="faster_whisper",
             faster_whisper_custom_model_path=None,
-            single_model=False,
             ssl_cert_file=None,
             ssl_key_file=None,
             ssl_passphrase=None):
@@ -226,36 +264,24 @@ class TranscriptionServer:
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
 
-        if single_model:
-            if faster_whisper_custom_model_path:
-                logging.info("Custom model option was provided. Switching to single model mode.")
-                self.single_model = True
-            else:
-                logging.info("Single model mode currently only works with custom models.")
+        self.create_model(faster_whisper_custom_model_path)
 
         if not BackendType.is_valid(backend):
             raise ValueError(f"{backend} is not a valid backend type. Choose backend from {BackendType.valid_types()}")
 
-        # Create SSL context if SSL parameters are provided
+        # Configure SSL context using the new method
+        ssl_context = self.configure_ssl(ssl_cert_file, ssl_key_file, ssl_passphrase)
 
-        if ssl_cert_file and ssl_key_file:
-            logging.info(f"SSL certificate found: {ssl_cert_file}")
-            logging.info(f"SSL key found: {ssl_key_file}")
+        # Log the server availability
+        if ssl_context:
             logging.info(f"Server will be available at: wss://{host}:{port}")
         else:
             logging.info(f"SSL not configured. Server will be available at: ws://{host}:{port}")
-            
-        ssl_context = None
-        if ssl_cert_file and ssl_key_file:
-            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            ssl_context.load_cert_chain(certfile=ssl_cert_file, keyfile=ssl_key_file, password=ssl_passphrase)
 
         # Start the server with SSL support if ssl_context is not None
         with serve(
                 functools.partial(
-                    self.recv_audio,
-                    backend=BackendType(backend),
-                    faster_whisper_custom_model_path=faster_whisper_custom_model_path,
+                    self.recv_audio
                 ),
                 host,
                 port,

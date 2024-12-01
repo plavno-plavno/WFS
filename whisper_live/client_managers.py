@@ -51,10 +51,7 @@ class ClientManager:
         Args:
             websocket: The websocket associated with the client to be removed.
         """
-        client = self.clients.pop(websocket, None)
-        if client:
-            client.cleanup()
-        self.start_times.pop(websocket, None)
+        self.clients.pop(websocket, None)
 
     def get_wait_time(self):
         """
@@ -135,16 +132,16 @@ class ListenerManager(ClientManager):
     def send_message_to_all_listeners(self, message, client_uid):
         try:
             listeners = self.find_clients_by_listener_uid(client_uid)
-
             if not listeners:
-                logging.info("No listeners found")
                 return
 
             for listener in listeners:
                 try:
                     listener.websocket.send(json.dumps(message))
+
                 except Exception as e:
-                    logging.INFO(f"Error sending message to listener {listener.client_uid}: {str(e)}")
+                    logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
+                    print('removing listener-------------------------===================================-------------------------------')
                     self.remove_client(listener.websocket)
 
         except Exception as e:

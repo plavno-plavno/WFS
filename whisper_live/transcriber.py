@@ -203,12 +203,12 @@ class WhisperModel:
         audio: Union[str, BinaryIO, np.ndarray],
         language: Optional[str] = None,
         task: str = "transcribe",
-        beam_size: int = 6,
-        best_of: int = 5,
+        beam_size: int = 3,
+        best_of: int = 2,
         patience: float = 1.5,
         length_penalty: float = 1,
         repetition_penalty: float = 1.1,
-        no_repeat_ngram_size: int = 3,
+        no_repeat_ngram_size: int = 2,
         temperature: Union[float, List[float], Tuple[float, ...]] = [
             0.0,
             0.2,
@@ -698,6 +698,8 @@ class WhisperModel:
                     )
 
                 prompt_reset_since = len(all_tokens)
+        os.system('clear')
+        print(all_segments)
         return all_segments
 
     def encode(self, features: np.ndarray) -> ctranslate2.StorageView:
@@ -784,7 +786,6 @@ class WhisperModel:
                 temperature,
                 compression_ratio,
             )
-
             all_results.append(decode_result)
 
             needs_fallback = False

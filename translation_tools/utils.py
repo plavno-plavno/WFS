@@ -30,7 +30,7 @@ class LoadBalancedTranslator:
                 buffer_text=self.buffer_text) for translator in translators]
         else:
             self.translators = [
-                GroqTranslator(buffer_text=self.buffer_text),
+                # GroqTranslator(buffer_text=self.buffer_text),
                 CerebrasTranslator(buffer_text=self.buffer_text)
             ]
 
