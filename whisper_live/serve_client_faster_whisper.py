@@ -53,9 +53,10 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.use_vad = use_vad
         self.sa = SentenceAccumulator()
         self.sa_arabic = SentenceAccumulatorArabic()
+        self.stop_event = threading.Event()
 
         # threading
-        self.trans_thread = threading.Thread(target=self.speech_to_text)
+        self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
         self.trans_thread.start()
 
         self.websocket.send(
@@ -206,13 +207,18 @@ class ServeClientFasterWhisper(ServeClientBase):
             Exception: If there is an issue with audio processing or WebSocket communication.
 
         """
-        while True:
+        while not self.stop_event.is_set():
             if self.exit:
                 logging.info("Exiting speech to text thread")
                 break
 
             if self.frames_np is None:
                 continue
+
+            client = self.server.speaker_manager.get_client(self.websocket)
+            if not client:
+                print("CLIENT DEAD")
+                return
 
             self.clip_audio_if_no_valid_segment()
 
@@ -238,6 +244,21 @@ class ServeClientFasterWhisper(ServeClientBase):
         if dot_index < len(text) - 1 and dot_index != -1:
             return text[dot_index + 1:]
         return text
+
+    def stop_and_destroy_thread(self):
+        """
+        Signals the transcription thread to stop and waits for it to terminate.
+        """
+        # Set the stop event to signal the thread to exit
+        self.stop_event.set()
+
+        # Wait for the thread to finish execution
+        self.trans_thread.join(timeout=3)  # Adjust timeout as needed
+
+        if self.trans_thread.is_alive():
+            print("Thread did not terminate within the timeout period.")
+        else:
+            print("Transcription thread has been successfully stopped.")
 
     def format_segment(self, start, end, text: str, translate=False):
         """

@@ -43,8 +43,8 @@ class ClientManager:
             client = self.clients.get(websocket)
             if client:
                 try:
-                    client.disconnect()
                     client.cleanup()
+                    client.stop_and_destroy_thread()
                     logging.info(f"Client with uid '{client.client_uid}' has been disconnected.")
                 except Exception as e:
                     logging.error(f"Failed to disconnect client with uid '{client.client_uid}': {e}")
@@ -160,7 +160,6 @@ class ListenerManager(ClientManager):
             for listener in listeners:
                 try:
                     listener.websocket.send(json.dumps(message))
-
                 except Exception as e:
                     logging.error(f"Error sending message to listener {listener.client_uid}: {str(e)}")
                     print('removing listener-------------------------===================================-------------------------------')

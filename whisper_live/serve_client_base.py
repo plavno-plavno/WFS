@@ -170,18 +170,27 @@ class ServeClientBase(object):
         try:            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
-            
-            # Send to all listeners
-            self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
-        
+
         except Exception as e:
-            logging.error('[ERROR SEND TO IMAM AND CLIENT]')    
+            logging.error('[ERROR SEND IMAM]')
+            print(message)
             client = self.server.speaker_manager.get_client(self.websocket)
+            print(client)
             if client and not isinstance(client, bool):
                 print('Trying to CLEAN UP')
-                client.cleanup()                
+                client.stop_and_destroy_thread()
+                client.cleanup()
             else:
                print('Client is not in a clients array anymore')
+        try:
+            # Send to all listeners
+            self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
+
+        except Exception as e:
+            logging.error('[ERROR SEND TO LISTENERS]')
+            print('LST')
+            pass
+
 
             
 

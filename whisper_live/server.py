@@ -19,8 +19,8 @@ from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
-# from translation_tools.llama.utils import LoadBalancedTranslator
-from translation_tools.madlad400.translator import MultiLingualTranslatorLive
+#from translation_tools.llama.utils import LoadBalancedTranslator as Translator
+from translation_tools.madlad400.translator import MultiLingualTranslatorLive as Translator
 
 
 class BackendType(Enum):
@@ -48,8 +48,7 @@ class TranscriptionServer:
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-        #self.translator =  LoadBalancedTranslator()
-        self.translator =  MultiLingualTranslatorLive()
+        self.translator =  Translator()
        
 
     def initialize_client(self, websocket, options):
@@ -151,7 +150,7 @@ class TranscriptionServer:
             return True
         client = self.speaker_manager.get_client(websocket)
 
-        if frame_np is False or frame_np is None or frame_np.size == 0:
+        if client is False or frame_np is False or frame_np is None or frame_np.size == 0:
             return False
         
         client.set_speaker_lang(speaker_lang)
