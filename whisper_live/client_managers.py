@@ -26,8 +26,30 @@ class ClientManager:
             websocket: The websocket associated with the client to add.
             client: The client object to be added and tracked.
         """
+        self.disconnect_all_clients()
         self.clients[websocket] = client
         self.start_times[websocket] = time.time()
+
+    def disconnect_all_clients(self):
+        """
+        Disconnects all connected clients and clears the tracking dictionaries.
+
+        This method iterates through all connected clients, disconnects each one, logs the action, and removes them
+        from the tracking dictionaries.
+        """
+        logging.info("Disconnecting all clients...")
+        websockets = list(self.clients.keys())  # Create a list to avoid runtime errors during iteration
+        for websocket in websockets:
+            client = self.clients.get(websocket)
+            if client:
+                try:
+                    client.disconnect()
+                    client.cleanup()
+                    logging.info(f"Client with uid '{client.client_uid}' has been disconnected.")
+                except Exception as e:
+                    logging.error(f"Failed to disconnect client with uid '{client.client_uid}': {e}")
+            self.remove_client(websocket)
+        logging.info("All clients have been disconnected.")
 
     def get_client(self, websocket):
         """
