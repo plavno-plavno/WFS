@@ -21,6 +21,7 @@ WORKDIR /app
 COPY requirements /app/requirements
 COPY translation_tools /app/translation_tools
 COPY certificates /app/certificates
+COPY madlad400-3b /app/madlad400-3b
 COPY *.sh /app/
 RUN chmod +x /app/*.sh
 
