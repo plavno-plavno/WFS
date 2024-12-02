@@ -2,6 +2,7 @@
 
 # Install necessary system packages
 apt-get install portaudio19-dev ffmpeg wget -y
+apt-get install cmake libboost-all-dev
 
 # Base URL for faster-whisper-large-v3 files
 BASE_URL="https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main"

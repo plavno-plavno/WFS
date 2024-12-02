@@ -698,8 +698,6 @@ class WhisperModel:
                     )
 
                 prompt_reset_since = len(all_tokens)
-        os.system('clear')
-        print(all_segments)
         return all_segments
 
     def encode(self, features: np.ndarray) -> ctranslate2.StorageView:

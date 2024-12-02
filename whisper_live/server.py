@@ -14,7 +14,7 @@ import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
-#from translation_tools.utils import LoadBalancedTranslator
+from translation_tools.utils import LoadBalancedTranslator
 from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
@@ -49,7 +49,7 @@ class TranscriptionServer:
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-       #self.translator =  LoadBalancedTranslator()
+        #self.translator =  LoadBalancedTranslator()
         self.translator =  MultiLingualTranslatorLive()
        
 
