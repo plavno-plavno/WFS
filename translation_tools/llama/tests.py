@@ -1,6 +1,6 @@
 import unittest
 
-from translation_tools.utils import LoadBalancedTranslator
+from translation_tools.llama.utils import LoadBalancedTranslator
 
 
 class TestLoadBalancedTranslator(unittest.TestCase):

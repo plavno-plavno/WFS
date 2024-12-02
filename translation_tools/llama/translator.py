@@ -155,10 +155,15 @@ def retry_on_error(max_retries: int = 4, retry_delay: float = 0.00):
     return decorator
 
 
-class CerebrasTranslator:
-    def __init__(self):
-        self.client = Cerebras(api_key="csk-wdpk43pkx2n439jc9c8pf9wy5vrhtje6c8pyfcyvy9x3jnhc")
-        self.buffer_text = []
+class LlamaTranslator:
+    def __init__(
+            self,
+            client=None,
+            buffer_text=None
+        ):
+        self.client = client
+        self.own_buffer = buffer_text is None
+        self.buffer_text = buffer_text if buffer_text else []
 
     def get_example_response(self, tgt_langs, language_examples=LANGUAGE_EXAMPLES):
         translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
@@ -172,22 +177,17 @@ class CerebrasTranslator:
 
     @timer_decorator
     @retry_on_error(max_retries=4, retry_delay=0.0)
-    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response = {}) -> Dict[str, str]:
+    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
-
         Important rules:
         1. Return strict JSON format with ISO 2-letter language codes
         2. Keep exact structure as in example
         3. Maintain original meaning without additions
         4. Include all specified target languages
         5. Use previous context only for reference: {" ".join(self.buffer_text)}
-
         Example response (strictly follow this format):
         {example_response}
-
         Text to translate: {text}"""
-
-
         completion = self.client.chat.completions.create(
             messages=[
                 {
@@ -199,27 +199,24 @@ class CerebrasTranslator:
                     "content": text
                 }
             ],
-            model="llama3.1-70b",
+            model=self.model,
             response_format={"type": "json_object"},
             temperature=0.2,
             top_p=0.1,
         )
         return completion.choices[0].message.content
-    
+
     def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
         if tgt_langs is None:
             tgt_langs = ["ar", "en", "fa", "ru", "ur"]
-
         translations = {"translate": {}}
         tgt_lang_chunks = self.split_into_chunks(tgt_langs)
-
         for tgt_lang_chunk in tgt_lang_chunks:
             example_response = self.get_example_response(tgt_lang_chunk)
             chunk_translations = self.translate(text, src_lang, tgt_lang_chunk, example_response)
             translations["translate"].update(chunk_translations["translate"])
-            
-        self.buffer_text.append(text)
-        if len(self.buffer_text) > 3:
-           self.buffer_text.pop(0)
-
+        if self.own_buffer:
+            self.buffer_text.append(text)
+            if len(self.buffer_text) > 3:
+                self.buffer_text.pop(0)
         return translations

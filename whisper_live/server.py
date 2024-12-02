@@ -7,6 +7,7 @@ import logging
 import torch
 from enum import Enum
 from typing import List, Optional
+
 from whisper_live.transcriber import WhisperModel
 
 import numpy as np
@@ -14,14 +15,12 @@ import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from translation_tools.utils import LoadBalancedTranslator
 from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
+# from translation_tools.llama.utils import LoadBalancedTranslator
 from translation_tools.madlad400.translator import MultiLingualTranslatorLive
-
-
 
 
 class BackendType(Enum):
