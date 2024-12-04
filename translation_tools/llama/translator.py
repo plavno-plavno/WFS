@@ -109,6 +109,11 @@ LANGUAGE_EXAMPLES = {
     "zu": "Kungani ukuqonda okusheshayo kubalulekile?"
 }
 
+IGNORE_PHRASES = [
+    "subscribing to a channel",
+    "Nancy Ajram's translation",
+]
+
 def timer_decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -187,8 +192,8 @@ class LlamaTranslator:
         4. Include all specified target languages
         5. Use previous context only for reference: {" ".join(self.buffer_text)}
         6. Be aware that the text may relate to Islamic faith and religion
-        7. Ignore phrases about subscribing to a channel if they do not fit the context theme.
-
+        7. Ignore the following phrases if they do not fit the context theme: {', '.join(IGNORE_PHRASES)}.
+        
         Example response (strictly follow this format):
         {example_response}
         Text to translate: {text}"""

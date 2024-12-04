@@ -182,14 +182,7 @@ class ServeClientBase(object):
                 client.cleanup()
             else:
                print('Client is not in a clients array anymore')
-        try:
-            # Send to all listeners
-            self.server.listener_manager.send_message_to_all_listeners(message, client_uid=self.client_uid)
 
-        except Exception as e:
-            logging.error('[ERROR SEND TO LISTENERS]')
-            print('LST')
-            pass
 
 
             

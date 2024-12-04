@@ -56,7 +56,16 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.sa = SentenceAccumulator()
         self.sa_arabic = SentenceAccumulatorArabic()
         self.stop_event = threading.Event()
+
+
         self.previous_translated_segment = ""
+        self.previous_segment_ready = False
+
+        self.translation_id = 1
+        self.translation_accumulated_text = ''
+        self.translation_start_time = "0.0"
+        self.translation_end_time = "0.0"
+        
 
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
@@ -71,14 +80,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             )
         )
-    def check_punctuation_mark(self, text, language):
-        rtl_languages = ["ar", "fa", "ur", "he"]
-        is_rtl = language in rtl_languages
-        if is_rtl:
-            return text.startswith((".", "?", "!", "؟", "۔"))
-        else:
-            return text.endswith((".", "?", "!", "؟", "۔"))
-
 
     def check_valid_model(self, model_size):
         """
@@ -232,6 +233,11 @@ class ServeClientFasterWhisper(ServeClientBase):
             try:
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
+
+                if result is None and self.translation_accumulated_text != "":
+                    print(f"[INFO]: No output from Whisper, using previous output: {self.translation_accumulated_text}")
+                    self.send_translations_to_all_liseners(self.prepare_translations())
+
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
                     time.sleep(0.25)  # wait for voice activity, result is None when no voice activity
@@ -263,6 +269,35 @@ class ServeClientFasterWhisper(ServeClientBase):
         else:
             print("Transcription thread has been successfully stopped.")
 
+
+    def send_translations_to_all_liseners(self, translations):
+
+        message = {
+            "id": self.translation_id,
+            "start": self.translation_start_time,
+            "end": self.translation_end_time,
+            "translate": translations,
+        }
+        print("=========================+================================")
+        for k, v in message.items():
+            if k == "translate":
+                print(k.upper(), " :")
+                for lang, translated_text in v.items():
+                    print(f" - {lang.upper()} - {translated_text}")
+            else:
+                print(f"{k.upper()} - {v}")    
+
+        try:
+            self.server.listener_manager.send_message_to_all_listeners(message=message,
+                                                                       client_uid=self.client_uid)
+            self.translation_id += 1                                                      
+        except Exception as e:
+            logging.error('[ERROR SEND TO LISTENERS]')
+            print('LST')
+
+    def is_ltr(self):
+        return self.speaker_lang in ['ar', 'he', 'fa', 'ur', 'ps', 'sd']
+
     def normalize_string(self, s):
         s = s.lower()
         s = s.translate(str.maketrans('', '', string.punctuation))
@@ -271,6 +306,22 @@ class ServeClientFasterWhisper(ServeClientBase):
 
     def are_strings_equal(self, str1, str2):
         return self.normalize_string(str1) == self.normalize_string(str2)
+
+    def prepare_translations(self, text = None):
+        if text is None:
+            text = self.translation_accumulated_text
+        translations = self.translator.get_translations(
+                text=text,
+                src_lang=self.speaker_lang,
+                tgt_langs=self.all_langs
+            )
+        
+        translations = translations.get('translate', {})
+        translations[self.speaker_lang] = self.translation_accumulated_text
+        self.translation_accumulated_text = ""
+
+        return translations
+
 
     def format_segment(self, start, end, text: str, translate=False):
         """
@@ -294,33 +345,27 @@ class ServeClientFasterWhisper(ServeClientBase):
             'text': text,
         }
 
-        # Perform translation if the flag is set and translator is available
-        if translate and self.translator and not self.are_strings_equal(text, self.previous_translated_segment) :
+        if translate and not self.previous_segment_ready:
+            self.translation_start_time =  "{:.3f}".format(start)
 
-            if self.speaker_lang in ['ar']:
-                sentence = self.sa_arabic.process_segment(text)
+        if not translate and self.previous_segment_ready:
+            if self.is_ltr():
+                self.send_translations_to_all_liseners(self.prepare_translations())
             else:
-                sentence = self.sa.process_segment(text)
+                sentence = self.sa.process_segment(self.translation_accumulated_text)
+                if sentence:
+                    self.send_translations_to_all_liseners(self.prepare_translations(sentence))
 
-            if sentence is not None:
-                # Get the translation for the sentence
-                translation = self.translator.get_translations(
-                    text=sentence,
-                    src_lang=self.speaker_lang,
-                    tgt_langs=self.all_langs
-                )
-                self.previous_translated_segment = text
-                item['translate'] = translation.get('translate', {})
-                item['translate'][self.speaker_lang] = sentence
+        if translate:
+            self.translation_end_time = "{:.3f}".format(end)
+            if self.is_ltr():
+                self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
+            else:
+                self.translation_accumulated_text = self.translation_accumulated_text + " " + text
 
-                # Print translated text for each language
-                local_time = time.localtime()
-                formatted_time = time.strftime('%Y-%m-%d %H:%M:%S', local_time)
-                print("Formatted local time:", formatted_time)
-                print("==========================================================")
-                for lang, translated_text in item['translate'].items():
-                    print(f"{lang.upper()} - {translated_text}")
+            self.translation_accumulated_text = self.translation_accumulated_text.strip()
 
+        self.previous_segment_ready = translate
         return item
 
     def update_segments(self, segments, duration):
