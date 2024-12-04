@@ -356,11 +356,16 @@ class ServeClientFasterWhisper(ServeClientBase):
                 if sentence:
                     self.send_translations_to_all_liseners(self.prepare_translations(sentence))
 
-        if translate:
+        if translate and not self.are_strings_equal(text, self.previous_translated_segment) :
             self.translation_end_time = "{:.3f}".format(end)
             if self.is_ltr():
                 self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
             else:
+                text1 = ' '.join(self.previous_translated_segment.lower().split()).strip()
+                text2 = ' '.join(text.lower().split()).strip()
+                if text2.startswith(text1):
+                    text = text2[len(text1):].strip()
+
                 self.translation_accumulated_text = self.translation_accumulated_text + " " + text
 
             self.translation_accumulated_text = self.translation_accumulated_text.strip()
