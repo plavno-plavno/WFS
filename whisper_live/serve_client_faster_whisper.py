@@ -4,6 +4,8 @@ import threading
 import time
 import json
 import time
+import string
+
 
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.sentence_accumulator import SentenceAccumulator
@@ -54,6 +56,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.sa = SentenceAccumulator()
         self.sa_arabic = SentenceAccumulatorArabic()
         self.stop_event = threading.Event()
+        self.previous_translated_segment = ""
 
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
@@ -260,6 +263,15 @@ class ServeClientFasterWhisper(ServeClientBase):
         else:
             print("Transcription thread has been successfully stopped.")
 
+    def normalize_string(self, s):
+        s = s.lower()
+        s = s.translate(str.maketrans('', '', string.punctuation))
+        s = ' '.join(s.split())
+        return s
+
+    def are_strings_equal(self, str1, str2):
+        return self.normalize_string(str1) == self.normalize_string(str2)
+
     def format_segment(self, start, end, text: str, translate=False):
         """
         Formats a transcription segment with precise start and end times, along with the text.
@@ -283,7 +295,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         }
 
         # Perform translation if the flag is set and translator is available
-        if translate and self.translator:
+        if translate and self.translator and not self.are_strings_equal(text, self.previous_translated_segment) :
 
             if self.speaker_lang in ['ar']:
                 sentence = self.sa_arabic.process_segment(text)
@@ -297,7 +309,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                     src_lang=self.speaker_lang,
                     tgt_langs=self.all_langs
                 )
-
+                self.previous_translated_segment = text
                 item['translate'] = translation.get('translate', {})
                 item['translate'][self.speaker_lang] = sentence
 

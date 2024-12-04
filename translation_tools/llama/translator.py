@@ -179,12 +179,16 @@ class LlamaTranslator:
     @retry_on_error(max_retries=4, retry_delay=0.0)
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
+
         Important rules:
         1. Return strict JSON format with ISO 2-letter language codes
         2. Keep exact structure as in example
         3. Maintain original meaning without additions
         4. Include all specified target languages
         5. Use previous context only for reference: {" ".join(self.buffer_text)}
+        6. Be aware that the text may relate to Islamic faith and religion
+        7. Ignore phrases about subscribing to a channel if they do not fit the context theme.
+
         Example response (strictly follow this format):
         {example_response}
         Text to translate: {text}"""

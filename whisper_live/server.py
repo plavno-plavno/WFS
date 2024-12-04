@@ -19,8 +19,8 @@ from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.serve_client_faster_whisper import ServeClientFasterWhisper
 from whisper_live.serve_listener import ServeListener
-#from translation_tools.llama.utils import LoadBalancedTranslator as Translator
-from translation_tools.madlad400.translator import MultiLingualTranslatorLive as Translator
+from translation_tools.llama.utils import LoadBalancedTranslator as Translator
+#from translation_tools.madlad400.translator import MultiLingualTranslatorLive as Translator
 
 
 class BackendType(Enum):
