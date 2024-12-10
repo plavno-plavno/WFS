@@ -40,6 +40,29 @@ create_a_record() {
     fi
 }
 
-# Call the function with the dynamic domain name
+# Function to set up Vast.ai machine label using vastai CLI
+setup_vast_ai_label() {
+    local label="c_${ID}"
+
+    # Check if Vast.ai CLI is installed
+    if ! command -v vastai &> /dev/null; then
+        echo "Error: Vast.ai CLI (vastai) is not installed."
+        return 1
+    fi
+
+    # Assign the label to the machine using the CLI
+    response=$(vastai label instance "$ID" "$label" 2>&1)
+
+    if [[ $? -eq 0 ]]; then
+        echo "Successfully labeled Vast.ai instance $ID with label $label."
+    else
+        echo "Failed to label Vast.ai instance $ID."
+        echo "Response: $response"
+    fi
+}
+
+# Call the Cloudflare A record creation function
 create_a_record "c${ID}" $IP
 
+# Call the Vast.ai label setup function
+setup_vast_ai_label
