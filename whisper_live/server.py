@@ -44,7 +44,7 @@ class TranscriptionServer:
 
     def __init__(self):
         self.transcriber = None
-        self.speaker_manager = SpeakerManager()
+        self.speaker_manager = SpeakerManager(max_clients=6)
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False

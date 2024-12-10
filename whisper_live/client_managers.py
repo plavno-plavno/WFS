@@ -26,7 +26,6 @@ class ClientManager:
             websocket: The websocket associated with the client to add.
             client: The client object to be added and tracked.
         """
-        self.disconnect_all_clients()
         self.clients[websocket] = client
         self.start_times[websocket] = time.time()
 
