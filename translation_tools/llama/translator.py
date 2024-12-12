@@ -109,6 +109,11 @@ LANGUAGE_EXAMPLES = {
     "zu": "Kungani ukuqonda okusheshayo kubalulekile?"
 }
 
+IGNORE_PHRASES = [
+    "subscribing to a channel",
+    "Nancy Ajram's translation",
+]
+
 def timer_decorator(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -156,6 +161,18 @@ def retry_on_error(max_retries: int = 4, retry_delay: float = 0.00):
 
 
 class LlamaTranslator:
+    RELIGIOUS_CONTEXT_RULES = [
+        "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
+        "Ensure that the Prophet Muhammad is not translated as 'lord' or 'master', as this can be perceived negatively.",
+        "Translate the word 'Allah' as 'Allah' to maintain its original meaning.",
+        "Avoid adding interpretations that may alter the meaning of the religious text.",
+        "Respect religious terms and concepts to avoid offending the beliefs of Muslims.",
+        "Be aware of cultural and linguistic nuances specific to Islamic texts and traditions.",
+        "Use precise and accurate translations of Islamic terminology, such as 'Quran', 'Hadith', 'Sunna', and 'Sharia'.",
+        "Avoid using language that may be perceived as disrespectful or insensitive to Islamic values and principles.",
+        "Consider the context and audience when translating religious texts to ensure that the translation is suitable and respectful.",
+    ]
+
     def __init__(
             self,
             client=None,
@@ -164,7 +181,7 @@ class LlamaTranslator:
         self.client = client
         self.own_buffer = buffer_text is None
         self.buffer_text = buffer_text if buffer_text else []
-
+        
     def get_example_response(self, tgt_langs, language_examples=LANGUAGE_EXAMPLES):
         translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
         response = {
@@ -179,7 +196,6 @@ class LlamaTranslator:
     @retry_on_error(max_retries=4, retry_delay=0.0)
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
-
         Important rules:
         1. Return strict JSON format with ISO 2-letter language codes
         2. Keep exact structure as in example
@@ -187,11 +203,12 @@ class LlamaTranslator:
         4. Include all specified target languages
         5. Use previous context only for reference: {" ".join(self.buffer_text)}
         6. Be aware that the text may relate to Islamic faith and religion
-        7. Ignore phrases about subscribing to a channel if they do not fit the context theme.
-
+        Additional rules:
+        {', '.join(self.RELIGIOUS_CONTEXT_RULES)}
         Example response (strictly follow this format):
         {example_response}
         Text to translate: {text}"""
+        
         completion = self.client.chat.completions.create(
             messages=[
                 {
