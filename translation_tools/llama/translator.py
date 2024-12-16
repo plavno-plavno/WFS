@@ -105,33 +105,6 @@ LANGUAGE_EXAMPLES = {
     "zh": '先知穆罕默德（愿主福安之）说，家庭是社会的基础，我们必须共同努力，打造一个充满爱与尊重的环境。',
 }
 
-religious_phrases = [
-        "بسم الله الرحمن الرحيم --> In the name of Allah, the Most Gracious, the Most Merciful",
-        "الحمد لله --> Praise be to Allah",
-        "أشهد أن لا إله إلا الله --> I bear witness that there is no god but Allah",
-        "صلى الله عليه وسلم --> May Allah bless him and grant him peace",
-        "يا أيها الناس --> O people",
-        "أما بعد --> And after that",
-        "عباد الله --> Servants of Allah",
-        "الأسرة الإماراتية --> The Emirati Family",
-        "الحمد لله الذي خلق من الماء بشرا --> Praise be to Allah who created man from water",
-        "فجعله نسبا وصهرا --> He made him a relative and son-in-law",
-        "وأشهد أن لا إله إلا الله --> And I bear witness that there is no god but Allah",
-        "إلى الله وأشهد أن --> To Allah and I bear witness that",
-        "سيدنا ونبينا محمد رسول الله --> Our lord and prophet Muhammad, the messenger of Allah",
-        "صلى الله عليه وسلم ومبارك عليه --> May Allah bless him and grant him peace",
-        "عليه وعلى آله --> upon him and his family",
-        "وصحبه ومن والاه --> And he accompanied him and his",
-        "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله --> And after that, I advise you, servants of Allah and myself, to fear Allah",
-        "تقوى الله قال جل في علاه --> Piety to Allah, He said in His exaltedness",
-        "اتقوا ربكم الذي خلقكم من نفس واحدة --> Fear your Lord who created you from a single soul",
-        "وخلق منها زوجها --> And created from it its mate",
-        "وبث منها رجالا كثيرا ونساء --> And he sent forth many men and women from it",
-        "أيها المؤمنون قال الله تعالى والله جعل لكم من أنفسكم أزواجا وجعله لهم من أفرادكم --> O believers, God said: And God has made for you from yourselves mates, and made for them from your kind children",
-        "أزواجكم بنينا وحفدا --> Your wives and children are your enemies and descendants",
-        "إنها الأسرة يا عباد الله --> It is the family, O servants of God",
-        "عنوان البقاء --> Title of Survival"
-    ]
 
 IGNORE_PHRASES = [
     "subscribing to a channel",
@@ -217,36 +190,21 @@ class LlamaTranslator:
         5. Use previous context only for reference: {" ".join(self.buffer_text)}
 
         6.Key phrases as recommendations on how they should be translated:
-            "بسم الله الرحمن الرحيم --> In the name of Allah, the Most Gracious, the Most Merciful",
-            "الحمد لله --> Praise be to Allah",
-            "أشهد أن لا إله إلا الله --> I bear witness that there is no god but Allah",
-            "صلى الله عليه وسلم --> May Allah bless him and grant him peace",
-            "يا أيها الناس --> O people",
-            "أما بعد --> And after that",
-            "عباد الله --> Servants of Allah",
-            "الأسرة الإماراتية --> The Emirati Family",
-            "الحمد لله الذي خلق من الماء بشرا --> Praise be to Allah who created man from water",
-            "فجعله نسبا وصهرا --> He made him a relative and son-in-law",
-            "وأشهد أن لا إله إلا الله --> And I bear witness that there is no god but Allah",
-            "إلى الله وأشهد أن --> To Allah and I bear witness that",
-            "سيدنا ونبينا محمد رسول الله --> Our lord and prophet Muhammad, the messenger of Allah",
-            "صلى الله عليه وسلم ومبارك عليه --> May Allah bless him and grant him peace",
-            "عليه وعلى آله --> upon him and his family",
-            "وصحبه ومن والاه --> And he accompanied him and his",
-            "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله --> And after that, I advise you, servants of Allah and myself, to fear Allah",
-            "تقوى الله قال جل في علاه --> Piety to Allah, He said in His exaltedness",
-            "اتقوا ربكم الذي خلقكم من نفس واحدة --> Fear your Lord who created you from a single soul",
-            "وخلق منها زوجها --> And created from it its mate",
-            "وبث منها رجالا كثيرا ونساء --> And he sent forth many men and women from it",
-            "أيها المؤمنون قال الله تعالى والله جعل لكم من أنفسكم أزواجا وجعله لهم من أفرادكم --> O believers, God said: And God has made for you from yourselves mates, and made for them from your kind children",
-            "أزواجكم بنينا وحفدا --> Your wives and children are your enemies and descendants",
-            "إنها الأسرة يا عباد الله --> It is the family, O servants of God",
-            "عنوان البقاء --> Title of Survival"
+            "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",
+            "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله  --> After this, I, as a servant of Allah and myself, advise you to fear Allah",
+            "أزواجكم بنينا وحفدا   --> Your wives and children are your descendants",
+            "من استطاع  --> Whoever among you",
+            "منكم الباءة --> Those who can afford to marry",
+            "أضيق --> If they should be poor",
+            "ومودتها --> her affection",
+            "وتجنون ثمراتها أولادا بارين يحملون اسمكم --> And you will reap the fruits thereof, children who bear your names",
+            "يكونون دخرا لكم في كباركم --> They will be a source of provision for you in your old age",
+            "على ما فيه محق --> On what brings benefit",
 
         Additional rules:
             "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
-            "Never use 'lord' or 'master' before the name of Prophet Muhammad.",
-            "Do not translate sentences that contain the word 'subtitles' or 'subtitle.'",
+            "Never use the word 'lord' in a sentence where Prophet Muhammad is mentioned, instead, use the word 'master'.",
+            "Do not translate sentences containing the word 'subtitles' or 'subtitle', replace these sentences with a space symbol",
             "Use 'thereafter' instead of 'and after that.'",
             "Translate 'Allah' as 'Allah' to maintain its original meaning.",
             "Avoid adding interpretations that may alter the meaning of the religious text.",
@@ -290,4 +248,6 @@ class LlamaTranslator:
             self.buffer_text.append(text)
             if len(self.buffer_text) > 3:
                 self.buffer_text.pop(0)
+            print(f"BUFFER: {self.own_buffer}")
+        print(f"BUFFER1: {self.buffer_text}")
         return translations
