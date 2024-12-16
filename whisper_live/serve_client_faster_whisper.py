@@ -279,6 +279,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             "translate": translations,
         }
         print("=========================+================================")
+        print(f"SPEAKER LANG: {self.speaker_lang}")
         for k, v in message.items():
             if k == "translate":
                 print(k.upper(), " :")
@@ -349,12 +350,14 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.translation_start_time =  "{:.3f}".format(start)
 
         if not translate and self.previous_segment_ready:
-            if self.is_ltr():
-                self.send_translations_to_all_liseners(self.prepare_translations())
-            else:
-                sentence = self.sa.process_segment(self.translation_accumulated_text)
-                if sentence:
-                    self.send_translations_to_all_liseners(self.prepare_translations(sentence))
+            self.send_translations_to_all_liseners(self.prepare_translations())
+            
+            # if self.is_ltr():
+            #     self.send_translations_to_all_liseners(self.prepare_translations())
+            # else:
+            #     sentence = self.sa.process_segment(self.translation_accumulated_text)
+            #     if sentence:
+            #         self.send_translations_to_all_liseners(self.prepare_translations(sentence))
 
         if translate and not self.are_strings_equal(text, self.previous_translated_segment) :
             self.translation_end_time = "{:.3f}".format(end)
