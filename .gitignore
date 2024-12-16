@@ -100,3 +100,5 @@ venv3/
 output.srt
 *.txt
 *.udpipe
+*.mp3
+*.docx

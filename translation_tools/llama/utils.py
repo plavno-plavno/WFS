@@ -13,13 +13,15 @@ GROQ_API_KEY = "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"
 class CerebrasTranslator(LlamaTranslator):
     def __init__(self, client=None, buffer_text=None):
         super().__init__(client if client else Cerebras(api_key=PRIMARY_API_KEY), buffer_text)
-        self.model = "llama3.1-70b"
+        self.model = "llama3.3-70b"
+        self.buffer_text = buffer_text
 
 
 class GroqTranslator(LlamaTranslator):
     def __init__(self, client=None, buffer_text=None):
         super().__init__(client if client else Groq(api_key=GROQ_API_KEY), buffer_text)
         self.model = "llama3-groq-70b-8192-tool-use-preview"
+        self.buffer_text = buffer_text
 
 
 class LoadBalancedTranslator:
