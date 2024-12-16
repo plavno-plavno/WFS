@@ -122,7 +122,7 @@ def timer_decorator(func):
 
     return wrapper
 
-def retry_on_error(max_retries: int = 4, retry_delay: float = 0.00):
+def retry_on_error(max_retries: int = 4, retry_delay: float = 0.5):
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -204,7 +204,7 @@ class LlamaTranslator:
         Additional rules:
             "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
             "Never use the word 'lord' in a sentence where Prophet Muhammad is mentioned, instead, use the word 'master'.",
-            "Do not translate sentences containing the word 'subtitles' or 'subtitle', replace these sentences with a space symbol",
+            "Do not translate sentences containing the word 'subtitles', 'Subscribe to the channel', 'Nancy's translation' or 'subtitle', replace these sentences with a space symbol",
             "Use 'thereafter' instead of 'and after that.'",
             "Translate 'Allah' as 'Allah' to maintain its original meaning.",
             "Avoid adding interpretations that may alter the meaning of the religious text.",
@@ -248,6 +248,5 @@ class LlamaTranslator:
             self.buffer_text.append(text)
             if len(self.buffer_text) > 3:
                 self.buffer_text.pop(0)
-            print(f"BUFFER: {self.own_buffer}")
-        print(f"BUFFER1: {self.buffer_text}")
+        print(f"BUFFER: {self.buffer_text}")
         return translations

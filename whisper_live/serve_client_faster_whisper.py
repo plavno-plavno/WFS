@@ -349,7 +349,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         if translate and not self.previous_segment_ready:
             self.translation_start_time =  "{:.3f}".format(start)
 
-        if not translate and self.previous_segment_ready:
+        if not translate and self.previous_segment_ready and self.translation_accumulated_text:
             self.send_translations_to_all_liseners(self.prepare_translations())
             
             # if self.is_ltr():
