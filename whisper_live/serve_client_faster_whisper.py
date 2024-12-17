@@ -58,7 +58,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.stop_event = threading.Event()
 
 
-        self.previous_translated_segment = ""
+        self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
 
         self.translation_id = 1
@@ -296,7 +296,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             logging.error('[ERROR SEND TO LISTENERS]')
             print('LST')
 
-    def is_ltr(self):
+    def is_rtl(self):
         return self.speaker_lang in ['ar', 'he', 'fa', 'ur', 'ps', 'sd']
 
     def normalize_string(self, s):
@@ -308,17 +308,16 @@ class ServeClientFasterWhisper(ServeClientBase):
     def are_strings_equal(self, str1, str2):
         return self.normalize_string(str1) == self.normalize_string(str2)
 
-    def prepare_translations(self, text = None):
-        if text is None:
-            text = self.translation_accumulated_text
+    def prepare_translations(self):
         translations = self.translator.get_translations(
-                text=text,
+                text=self.translation_accumulated_text,
                 src_lang=self.speaker_lang,
                 tgt_langs=self.all_langs
             )
         
         translations = translations.get('translate', {})
         translations[self.speaker_lang] = self.translation_accumulated_text
+        self.previous_translation_accumulated_text = self.translation_accumulated_text
         self.translation_accumulated_text = ""
 
         return translations
@@ -350,29 +349,28 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.translation_start_time =  "{:.3f}".format(start)
 
         if not translate and self.previous_segment_ready and self.translation_accumulated_text:
-            self.send_translations_to_all_liseners(self.prepare_translations())
             
-            # if self.is_ltr():
-            #     self.send_translations_to_all_liseners(self.prepare_translations())
-            # else:
-            #     sentence = self.sa.process_segment(self.translation_accumulated_text)
-            #     if sentence:
-            #         self.send_translations_to_all_liseners(self.prepare_translations(sentence))
+            if self.is_rtl() and not self.previous_translation_accumulated_text.lower().strip().startswith(self.translation_accumulated_text.lower().strip()):
+                trans = self.prepare_translations()
+                self.send_translations_to_all_liseners(trans)
 
-        if translate and not self.are_strings_equal(text, self.previous_translated_segment) :
+            elif not self.previous_translation_accumulated_text.lower().strip().endswith(self.translation_accumulated_text.lower().strip()):
+                trans = self.prepare_translations()
+                self.send_translations_to_all_liseners(trans)
+
+            else:
+                print("*** !!!! **** CAUGHT **** !!!! ***")
+                self.previous_translation_accumulated_text = ""
+                self.translation_accumulated_text = ""
+
+        if translate:
             self.translation_end_time = "{:.3f}".format(end)
-            if self.is_ltr():
+            if self.is_rtl():
                 self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
             else:
-                text1 = ' '.join(self.previous_translated_segment.lower().split()).strip()
-                text2 = ' '.join(text.lower().split()).strip()
-                if text2.startswith(text1):
-                    text = text2[len(text1):].strip()
-
                 self.translation_accumulated_text = self.translation_accumulated_text + " " + text
 
             self.translation_accumulated_text = self.translation_accumulated_text.strip()
-
         self.previous_segment_ready = translate
         return item
 

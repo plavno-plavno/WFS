@@ -1,11 +1,10 @@
-from typing import List, Dict
+import re
 import time
-from typing import Dict, Callable, Any
 import json
 
-
-from cerebras.cloud.sdk import Cerebras
+from typing import Any, Callable, Dict, List
 from functools import wraps
+
 
 LANGUAGE_EXAMPLES = {
     "af": "Die gesin is die grondslag.",
@@ -121,6 +120,12 @@ def timer_decorator(func):
 
     return wrapper
 
+
+def clean_json_string(json_string: str) -> str:
+    json_string = re.sub(r"\\'", "'", json_string)
+    return json_string
+
+
 def retry_on_error(max_retries: int = 4, retry_delay: float = 0.5):
     def decorator(func: Callable):
         @wraps(func)
@@ -131,7 +136,8 @@ def retry_on_error(max_retries: int = 4, retry_delay: float = 0.5):
                     
                     if isinstance(result, str):
                         try:
-                            parsed_result = json.loads(result)
+                            cleaned_result = clean_json_string(result)
+                            parsed_result = json.loads(cleaned_result)
                         except json.JSONDecodeError:
                             raise ValueError("Invalid JSON response")
                     else:
@@ -178,7 +184,7 @@ class LlamaTranslator:
         return [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
 
     @timer_decorator
-    @retry_on_error(max_retries=4, retry_delay=0.0)
+    @retry_on_error(max_retries=4, retry_delay=0.50)
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
         Important rules:
