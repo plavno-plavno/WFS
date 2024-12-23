@@ -153,6 +153,7 @@ def retry_on_error(max_retries: int = 4, retry_delay: float = 0.5):
 
                 except Exception as e:
                     print(f"Attempt {attempt + 1}: An error occurred: {e}")
+                    print(result)
                     if attempt == max_retries - 1:
                         raise Exception(f"Failed to get translation after {max_retries} attempts: {str(e)}")
                 time.sleep(retry_delay)
@@ -192,9 +193,10 @@ class LlamaTranslator:
         2. Keep exact structure as in example
         3. Maintain original meaning without additions
         4. Include all specified target languages
-        5. Use previous context only for reference: {" ".join(self.buffer_text)}
+        5. Use previous context only for reference: < {" ".join(self.buffer_text)} > 
+        6. Ensure that any fragments of sentences that appear mistakenly from previous phrases are removed to maintain coherence and accuracy in translation.
 
-        6.Key phrases as recommendations on how they should be translated:
+        7.Key phrases as recommendations on how they should be translated:
             "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",
             "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله  --> After this, I, as a servant of Allah and myself, advise you to fear Allah",
             "أزواجكم بنينا وحفدا   --> Your wives and children are your descendants",
@@ -207,6 +209,7 @@ class LlamaTranslator:
             "على ما فيه محق --> On what brings benefit",
 
         Additional rules:
+            "Do not translate the word "God" as "diety" in English translations.",
             "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
             "Never use the word 'lord' in a sentence where Prophet Muhammad is mentioned, instead, use the word 'master'.",
             "Do not translate sentences containing the word 'subtitles', 'Subscribe to the channel', 'Nancy's translation' or 'subtitle', replace these sentences with a space symbol",
