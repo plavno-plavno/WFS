@@ -23,8 +23,8 @@ class ServeClientBase(object):
         self.t_start = None
         self.exit = False
         self.same_output_threshold = 0
-        self.show_prev_out_thresh = 4  # if pause(no output from whisper) show previous output for 5 seconds
-        self.add_pause_thresh = 2  # add a blank to segment list as a pause(no speech) for 3 seconds
+        self.show_prev_out_thresh = 4  # if pause(no output from whisper) show previous output for 4 seconds
+        self.add_pause_thresh = 2  # add a blank to segment list as a pause(no speech) for 2 seconds
         self.transcript = []
         self.send_last_n_segments = 10
         self.all_langs = None
@@ -172,16 +172,14 @@ class ServeClientBase(object):
             self.websocket.send(json.dumps(message))
 
         except Exception as e:
-            logging.error('[ERROR SEND IMAM]')
-            print(message)
+            logging.error('[ERROR SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN]',)
             client = self.server.speaker_manager.get_client(self.websocket)
-            print(client)
             if client and not isinstance(client, bool):
                 print('Trying to CLEAN UP')
                 client.stop_and_destroy_thread()
                 client.cleanup()
             else:
-               print('Client is not in a clients array anymore')
+               print('Client is not an object')
 
 
 

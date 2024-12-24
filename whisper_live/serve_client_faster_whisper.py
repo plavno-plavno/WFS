@@ -181,7 +181,6 @@ class ServeClientFasterWhisper(ServeClientBase):
             duration (float): Duration of the transcribed audio chunk.
         """
 
-        segments = []
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
@@ -269,15 +268,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         else:
             print("Transcription thread has been successfully stopped.")
 
+    def display_translation_info(self, message: dict):
 
-    def send_translations_to_all_liseners(self, translations):
-
-        message = {
-            "id": self.translation_id,
-            "start": self.translation_start_time,
-            "end": self.translation_end_time,
-            "translate": translations,
-        }
         print("=========================+================================")
         print(f"SPEAKER LANG: {self.speaker_lang}")
         for k, v in message.items():
@@ -286,15 +278,30 @@ class ServeClientFasterWhisper(ServeClientBase):
                 for lang, translated_text in v.items():
                     print(f" - {lang.upper()} - {translated_text}")
             else:
-                print(f"{k.upper()} - {v}")    
+                print(f"{k.upper()} - {v}")
+
+    def send_translations_to_all_listeners(self, translations):
+        """
+        Build translation message, display it,
+        and attempt to broadcast to all listeners.
+        """
+        message = {
+            "id": self.translation_id,
+            "start": self.translation_start_time,
+            "end": self.translation_end_time,
+            "translate": translations,
+        }
+
+        self.display_translation_info(message)
 
         try:
-            self.server.listener_manager.send_message_to_all_listeners(message=message,
-                                                                       client_uid=self.client_uid)
-            self.translation_id += 1                                                      
+            self.server.listener_manager.send_message_to_all_listeners(
+                message=message,
+                client_uid=self.client_uid
+            )
+            self.translation_id += 1
         except Exception as e:
-            logging.error('[ERROR SEND TO LISTENERS]')
-            print('LST')
+            logging.error('[ERROR SEND TO LISTENERS - LISTENER CONNECTION LOST]')
 
     def is_rtl(self):
         return self.speaker_lang in ['ar', 'he', 'fa', 'ur', 'ps', 'sd']
@@ -322,56 +329,74 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         return translations
 
-
-    def format_segment(self, start, end, text: str, translate=False):
+    def format_segment(self, start: float, end: float, text: str, translate: bool = False) -> dict:
         """
         Formats a transcription segment with precise start and end times, along with the text.
-        Translation is performed after accumulating text every two calls to the function.
-
-        Args:
-            start (float): Start time of the segment in seconds.
-            end (float): End time of the segment in seconds.
-            text (str): Transcription text corresponding to the segment.
-            translate (bool): Whether to include translation of the text.
-
-        Returns:
-            dict: A dictionary representing the formatted transcription segment, including:
-                  'start', 'end', 'text'. After every two calls, 'translate' with translation is added.
+        Now, it only accumulates text for RTL languages (ar, he, fa, etc.).
+        For LTR languages, it sends the text immediately (no accumulation logic).
         """
 
         item = {
-            'start': "{:.3f}".format(start),
-            'end': "{:.3f}".format(end),
+            'start': f"{start:.3f}",
+            'end': f"{end:.3f}",
             'text': text,
         }
 
+        # Check if current language is RTL
+        rtl_language = self.is_rtl()
+
+        # If we're about to start accumulating text for RTL only
         if translate and not self.previous_segment_ready:
-            self.translation_start_time =  "{:.3f}".format(start)
+            self.translation_start_time = f"{start:.3f}"
 
+        # -------------------------------------------------------------------------
+        # 1) Handle "finishing" a translation segment for RTL
+        #    (i.e., if translate just turned off but we have accumulated text).
+        #
+        # For LTR, we do not accumulate, so no finishing logic needed.
+        # -------------------------------------------------------------------------
         if not translate and self.previous_segment_ready and self.translation_accumulated_text:
-            
-            if self.is_rtl() and not self.previous_translation_accumulated_text.lower().strip().startswith(self.translation_accumulated_text.lower().strip()):
-                trans = self.prepare_translations()
-                self.send_translations_to_all_liseners(trans)
+            if rtl_language:
+                # Normalize text to reduce repeated .lower().strip() calls
+                prev_text = self.previous_translation_accumulated_text.lower().strip()
+                curr_text = self.translation_accumulated_text.lower().strip()
 
-            elif not self.previous_translation_accumulated_text.lower().strip().endswith(self.translation_accumulated_text.lower().strip()):
-                trans = self.prepare_translations()
-                self.send_translations_to_all_liseners(trans)
+                # Check duplicates for RTL (we use "startwith" logic)
+                if not prev_text.startswith(curr_text):
+                    translations = self.prepare_translations()
+                    self.send_translations_to_all_listeners(translations)
+                else:
+                    print(" **** CAUGHT DUPLICATE (RTL) **** ")
+                    self.previous_translation_accumulated_text = ""
+                    self.translation_accumulated_text = ""
 
-            else:
-                print("*** !!!! **** CAUGHT **** !!!! ***")
-                self.previous_translation_accumulated_text = ""
-                self.translation_accumulated_text = ""
-
+        # -------------------------------------------------------------------------
+        # 2) If we're in translation mode, handle text differently for RTL vs. LTR.
+        # -------------------------------------------------------------------------
         if translate:
-            self.translation_end_time = "{:.3f}".format(end)
-            if self.is_rtl():
-                self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
-            else:
-                self.translation_accumulated_text = self.translation_accumulated_text + " " + text
+            self.translation_end_time = f"{end:.3f}"
 
-            self.translation_accumulated_text = self.translation_accumulated_text.strip()
-        self.previous_segment_ready = translate
+            # ---------------------------
+            # 2a) For RTL, accumulate text
+            # ---------------------------
+            if rtl_language:
+                self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
+                self.translation_accumulated_text = self.translation_accumulated_text.strip()
+
+            # ---------------------------
+            # 2b) For LTR, send immediately (no accumulation)
+            # ---------------------------
+            else:
+                processed = self.sa.process_segment(text)
+                if processed:
+                   self.translation_accumulated_text = processed
+                   translations = self.prepare_translations()
+                   self.send_translations_to_all_listeners(translations)
+
+
+
+        self.previous_segment_ready = translate and rtl_language
+
         return item
 
     def update_segments(self, segments, duration):
