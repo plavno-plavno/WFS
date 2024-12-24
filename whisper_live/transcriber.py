@@ -238,8 +238,6 @@ class WhisperModel:
         clip_timestamps: Union[str, List[float]] = "0",
         hallucination_silence_threshold: Optional[float] = None,
         hotwords: Optional[str] = None,
-        language_detection_threshold: Optional[float] = None,
-        language_detection_segments: int = 1,
     ) -> Tuple[Iterable[Segment], TranscriptionInfo]:
         """Transcribes an input file.
 
@@ -437,8 +435,6 @@ class WhisperModel:
     ) -> Iterable[Segment]:
         content_frames = features.shape[-1] - \
             self.feature_extractor.nb_max_frames
-        content_duration = float(
-            content_frames * self.feature_extractor.time_per_frame)
 
         if isinstance(options.clip_timestamps, str):
             options = options._replace(
@@ -462,7 +458,6 @@ class WhisperModel:
             zip(seek_points[::2], seek_points[1::2])
         )
 
-        punctuation = "\"'“¿([{-\"'.。,，!！?？:：”)]}、"
 
         idx = 0
         clip_idx = 0
@@ -478,7 +473,6 @@ class WhisperModel:
             else:
                 all_tokens.extend(options.initial_prompt)
 
-        last_speech_timestamp = 0.0
         all_segments = []
         # NOTE: This loop is obscurely flattened to make the diff readable.
         # A later commit should turn this into a simpler nested loop.
@@ -557,32 +551,7 @@ class WhisperModel:
                     continue
 
             tokens = result.sequences_ids[0]
-            previous_seek = seek
             current_segments = []
-
-            # anomalous words are very long/short/improbable
-            def word_anomaly_score(word: dict) -> float:
-                probability = word.get("probability", 0.0)
-                duration = word["end"] - word["start"]
-                score = 0.0
-                if probability < 0.15:
-                    score += 1.0
-                if duration < 0.133:
-                    score += (0.133 - duration) * 15
-                if duration > 2.0:
-                    score += duration - 2.0
-                return score
-
-            def is_segment_anomaly(segment: Optional[dict]) -> bool:
-                if segment is None or not segment["words"]:
-                    return False
-                words = [w for w in segment["words"] if w["word"] not in punctuation]
-                words = words[:8]
-                score = sum(word_anomaly_score(w) for w in words)
-                return score >= 3 or score + 0.01 >= len(words)
-
-            def next_words_segment(segments: List[dict]) -> Optional[dict]:
-                return next((s for s in segments if s["words"]), None)
 
             single_timestamp_ending = (
                 len(tokens) >= 2
@@ -878,35 +847,20 @@ def restore_speech_timestamps(
     segments: Iterable[Segment],
     speech_chunks: List[dict],
     sampling_rate: int,
-) -> Iterable[Segment]:
+) -> List[Segment]:
     ts_map = SpeechTimestampsMap(speech_chunks, sampling_rate)
+    updated_segments = []
 
     for segment in segments:
-        if segment.words:
-            words = []
-            for word in segment.words:
-                # Ensure the word start and end times are resolved to the same chunk.
-                middle = (word.start + word.end) / 2
-                chunk_index = ts_map.get_chunk_index(middle)
-                word = word._replace(
-                    start=ts_map.get_original_time(word.start, chunk_index),
-                    end=ts_map.get_original_time(word.end, chunk_index),
-                )
-                words.append(word)
+        segment = segment._replace(
+            start=ts_map.get_original_time(segment.start),
+            end=ts_map.get_original_time(segment.end),
+        )
 
-            segment = segment._replace(
-                start=words[0].start,
-                end=words[-1].end,
-                words=words,
-            )
+        updated_segments.append(segment)
 
-        else:
-            segment = segment._replace(
-                start=ts_map.get_original_time(segment.start),
-                end=ts_map.get_original_time(segment.end),
-            )
+    return updated_segments
 
-    return segments
 
 
 def get_ctranslate2_storage(segment: np.ndarray) -> ctranslate2.StorageView:
@@ -942,37 +896,3 @@ def get_suppressed_tokens(
     )
 
     return sorted(set(suppress_tokens))
-
-
-def merge_punctuations(alignment: List[dict], prepended: str, appended: str) -> None:
-    # merge prepended punctuations
-    i = len(alignment) - 2
-    j = len(alignment) - 1
-    while i >= 0:
-        previous = alignment[i]
-        following = alignment[j]
-        if previous["word"].startswith(" ") and previous["word"].strip() in prepended:
-            # prepend it to the following word
-            following["word"] = previous["word"] + following["word"]
-            following["tokens"] = previous["tokens"] + following["tokens"]
-            previous["word"] = ""
-            previous["tokens"] = []
-        else:
-            j = i
-        i -= 1
-
-    # merge appended punctuations
-    i = 0
-    j = 1
-    while j < len(alignment):
-        previous = alignment[i]
-        following = alignment[j]
-        if not previous["word"].endswith(" ") and following["word"] in appended:
-            # append it to the previous word
-            previous["word"] = previous["word"] + following["word"]
-            previous["tokens"] = previous["tokens"] + following["tokens"]
-            following["word"] = ""
-            following["tokens"] = []
-        else:
-            i = j
-        j += 1

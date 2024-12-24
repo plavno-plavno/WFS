@@ -23,7 +23,6 @@ MADLAD_FILES=(
     "shared_vocabulary.json"
 )
 
-
 # Function to ensure the directory exists and download missing files
 ensure_fw_files() {
     local dir="$1"
@@ -48,9 +47,16 @@ ensure_fw_files() {
     done
 }
 
-# Call the function to ensure faster-whisper-large-v3 files are available
+# Ensure faster-whisper-large-v3 files are available
 ensure_fw_files "$FW_DIR" "$BASE_URL" "${FW_FILES[@]}"
-ensure_fw_files "$MADLAD_DIR" "$MADLAD_BASE_URL" "${MADLAD_FILES[@]}"
+
+# Only download MADLAD if USE_MADLAD is set to "true"
+if [ "$USE_MADLAD" = "true" ]; then
+    echo "USE_MADLAD is true. Downloading MADLAD files..."
+    ensure_fw_files "$MADLAD_DIR" "$MADLAD_BASE_URL" "${MADLAD_FILES[@]}"
+else
+    echo "Skipping MADLAD download. Set USE_MADLAD=true to enable."
+fi
 
 # Determine the path to pip
 if [ -x "/opt/conda/bin/pip" ]; then
