@@ -48,7 +48,7 @@ class TranscriptionServer:
         self.listener_manager = ListenerManager()
         self.use_vad = True
         self.single_model = False
-        self.translator =  Translator()
+        self.translator = Translator()
        
 
     def initialize_client(self, websocket, options):
@@ -248,7 +248,8 @@ class TranscriptionServer:
             faster_whisper_custom_model_path=None,
             ssl_cert_file=None,
             ssl_key_file=None,
-            ssl_passphrase=None):
+            ssl_passphrase=None,
+            loop=None):
         """
         Run the transcription server with optional SSL support.
 
@@ -259,6 +260,7 @@ class TranscriptionServer:
             ssl_key_file (str): Path to the SSL key file.
             ssl_passphrase (str): Optional passphrase for the SSL key.
         """
+        self.loop=loop
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")
 

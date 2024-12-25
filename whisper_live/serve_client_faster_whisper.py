@@ -1,11 +1,9 @@
 import logging
-import os
 import threading
-import time
 import json
 import time
 import string
-
+import asyncio
 
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.sentence_accumulator import SentenceAccumulator
@@ -57,7 +55,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.sa_arabic = SentenceAccumulatorArabic()
         self.stop_event = threading.Event()
 
-
+        self.loop = server.loop
         self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
 
@@ -235,7 +233,13 @@ class ServeClientFasterWhisper(ServeClientBase):
 
                 if result is None and self.translation_accumulated_text != "":
                     print(f"[INFO]: No output from Whisper, using previous output: {self.translation_accumulated_text}")
-                    self.send_translations_to_all_liseners(self.prepare_translations())
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.prepare_translations_async(),  # the async function
+                        self.loop  # the event loop in main thread
+                    )
+                    translations = future.result()
+                    if translations:
+                        self.send_translations_to_all_listeners(translations["translate"])
 
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
@@ -329,6 +333,30 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         return translations
 
+    async def prepare_translations_async(self):
+        """
+        Asynchronous version: Offloads the blocking `get_translations` method
+        to a ThreadPoolExecutor so it doesn't block the event loop.
+        """
+        text_to_translate = self.translation_accumulated_text
+
+        result = await self.loop.run_in_executor(
+            None,  # Use default ThreadPoolExecutor
+            self.translator.get_translations,
+            text_to_translate,
+            self.speaker_lang,
+            self.all_langs
+        )
+        print(result)
+        #translations = result.get('translate', {})
+        #translations[self.speaker_lang] = text_to_translate
+
+        self.previous_translation_accumulated_text = text_to_translate
+        self.translation_accumulated_text = ""
+
+        return None
+
+
     def format_segment(self, start: float, end: float, text: str, translate: bool = False) -> dict:
         """
         Formats a transcription segment with precise start and end times, along with the text.
@@ -390,8 +418,14 @@ class ServeClientFasterWhisper(ServeClientBase):
                 processed = self.sa.process_segment(text)
                 if processed:
                    self.translation_accumulated_text = processed
-                   translations = self.prepare_translations()
-                   self.send_translations_to_all_listeners(translations)
+                   #translations = self.prepare_translations()
+                   future = asyncio.run_coroutine_threadsafe(
+                       self.prepare_translations_async(),  # the async function
+                       self.loop  # the event loop in main thread
+                   )
+                   translations = future.result()
+                   if translations:
+                       self.send_translations_to_all_listeners(translations["translate"])
 
 
 

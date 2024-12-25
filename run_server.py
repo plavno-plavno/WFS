@@ -1,10 +1,10 @@
 import argparse
-import os
 import logging
+import asyncio
 
 logging.basicConfig(level=logging.ERROR)
 
-if __name__ == "__main__":
+async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', '-p',
                         type=int,
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     parser.add_argument('--backend', '-b',
                         type=str,
                         default='faster_whisper',
-                        help='Backends from ["faster_whisper"]')
+                        help='Backends from [\"faster_whisper\"]')
     parser.add_argument('--faster_whisper_custom_model_path', '-fw',
                         type=str, default=None,
                         help="Custom Faster Whisper Model")
@@ -37,6 +37,7 @@ if __name__ == "__main__":
 
     from whisper_live.server import TranscriptionServer
 
+    # Initialize your TranscriptionServer instance
     server = TranscriptionServer()
 
     # Prepare SSL parameters only if SSL files are provided
@@ -44,12 +45,20 @@ if __name__ == "__main__":
     ssl_cert_file = args.ssl_cert_file if args.ssl_cert_file else None
     ssl_passphrase = args.ssl_passphrase if args.ssl_passphrase else None
 
-    server.run(
+    loop = asyncio.get_running_loop()
+    # Run the blocking server.run(...) in a separate thread so our event loop doesn't block
+    await loop.run_in_executor(
+        None,  # default ThreadPoolExecutor
+        server.run,  # the function
         "0.0.0.0",
-        port=args.port,
-        backend=args.backend,
-        faster_whisper_custom_model_path=args.faster_whisper_custom_model_path,
-        ssl_key_file=ssl_key_file,
-        ssl_cert_file=ssl_cert_file,
-        ssl_passphrase=ssl_passphrase  # Include this line if passphrase is also needed
+        args.port,
+        args.backend,
+        args.faster_whisper_custom_model_path,
+        ssl_key_file,
+        ssl_cert_file,
+        ssl_passphrase,
+        loop
     )
+
+if __name__ == "__main__":
+    asyncio.run(main())
