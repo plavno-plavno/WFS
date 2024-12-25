@@ -260,6 +260,7 @@ class TranscriptionServer:
             ssl_key_file (str): Path to the SSL key file.
             ssl_passphrase (str): Optional passphrase for the SSL key.
         """
+
         self.loop=loop
         if faster_whisper_custom_model_path is not None and not os.path.exists(faster_whisper_custom_model_path):
             raise ValueError(f"Custom faster_whisper model '{faster_whisper_custom_model_path}' is not a valid path.")

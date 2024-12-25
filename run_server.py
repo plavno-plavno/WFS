@@ -54,8 +54,8 @@ async def main():
         args.port,
         args.backend,
         args.faster_whisper_custom_model_path,
-        ssl_key_file,
         ssl_cert_file,
+        ssl_key_file,
         ssl_passphrase,
         loop
     )
