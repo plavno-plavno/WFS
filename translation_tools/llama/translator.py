@@ -126,7 +126,7 @@ def clean_json_string(json_string: str) -> str:
     return json_string
 
 
-def retry_on_error(max_retries: int = 4, retry_delay: float = 0.5):
+def retry_on_error(max_retries: int = 3, retry_delay: float = 0.5):
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -185,7 +185,7 @@ class LlamaTranslator:
         return [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
 
     @timer_decorator
-    @retry_on_error(max_retries=4, retry_delay=0.50)
+    @retry_on_error(max_retries=2, retry_delay=0.50)
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
         Important rules:
