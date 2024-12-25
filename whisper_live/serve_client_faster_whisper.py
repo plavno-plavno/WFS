@@ -239,7 +239,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                     )
                     translations = future.result()
                     if translations:
-                        self.send_translations_to_all_listeners(translations["translate"])
+                        self.send_translations_to_all_listeners(translations)
 
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
@@ -347,91 +347,94 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.speaker_lang,
             self.all_langs
         )
-        print(result)
-        #translations = result.get('translate', {})
-        #translations[self.speaker_lang] = text_to_translate
 
+        translations = result.get('translate', {})
+
+        translations[self.speaker_lang] = text_to_translate
         self.previous_translation_accumulated_text = text_to_translate
         self.translation_accumulated_text = ""
 
-        return None
-
+        return translations
 
     def format_segment(self, start: float, end: float, text: str, translate: bool = False) -> dict:
         """
         Formats a transcription segment with precise start and end times, along with the text.
-        Now, it only accumulates text for RTL languages (ar, he, fa, etc.).
-        For LTR languages, it sends the text immediately (no accumulation logic).
+        For RTL languages (ar, he, fa, etc.), accumulates text until translation is done.
+        For LTR languages, text is sent immediately (no accumulation).
+        If `translate` changes from True to False and we're in RTL mode,
+        finishes up accumulated text with a translation call.
         """
 
+        # Prepare output item
         item = {
-            'start': f"{start:.3f}",
-            'end': f"{end:.3f}",
-            'text': text,
+            "start": f"{start:.3f}",
+            "end": f"{end:.3f}",
+            "text": text,
         }
 
-        # Check if current language is RTL
         rtl_language = self.is_rtl()
 
-        # If we're about to start accumulating text for RTL only
+        # (A) Potentially start accumulating text (RTL only)
+        #     When `translate` just turned on and wasn't on before.
         if translate and not self.previous_segment_ready:
-            self.translation_start_time = f"{start:.3f}"
+            self.translation_start_time = item["start"]
 
-        # -------------------------------------------------------------------------
-        # 1) Handle "finishing" a translation segment for RTL
-        #    (i.e., if translate just turned off but we have accumulated text).
-        #
-        # For LTR, we do not accumulate, so no finishing logic needed.
-        # -------------------------------------------------------------------------
-        if not translate and self.previous_segment_ready and self.translation_accumulated_text:
+        # (B) If `translate` just turned off (finishing a segment) and we had accumulated text
+        if (not translate
+                and self.previous_segment_ready
+                and self.translation_accumulated_text):
+
             if rtl_language:
-                # Normalize text to reduce repeated .lower().strip() calls
-                prev_text = self.previous_translation_accumulated_text.lower().strip()
-                curr_text = self.translation_accumulated_text.lower().strip()
-
-                # Check duplicates for RTL (we use "startwith" logic)
-                if not prev_text.startswith(curr_text):
-                    translations = self.prepare_translations()
-                    self.send_translations_to_all_listeners(translations)
+                # Check duplicates in RTL scenario
+                if not self._is_duplicate_rtl():
+                    self._send_async_translations()
                 else:
                     print(" **** CAUGHT DUPLICATE (RTL) **** ")
                     self.previous_translation_accumulated_text = ""
                     self.translation_accumulated_text = ""
 
-        # -------------------------------------------------------------------------
-        # 2) If we're in translation mode, handle text differently for RTL vs. LTR.
-        # -------------------------------------------------------------------------
+        # (C) If we're currently in translation mode, handle text
         if translate:
-            self.translation_end_time = f"{end:.3f}"
+            self.translation_end_time = item["end"]
 
-            # ---------------------------
-            # 2a) For RTL, accumulate text
-            # ---------------------------
+            # (C1) RTL: accumulate text
             if rtl_language:
-                self.translation_accumulated_text = text + ' ' + self.translation_accumulated_text
-                self.translation_accumulated_text = self.translation_accumulated_text.strip()
+                combined = text + " " + self.translation_accumulated_text
+                self.translation_accumulated_text = combined.strip()
 
-            # ---------------------------
-            # 2b) For LTR, send immediately (no accumulation)
-            # ---------------------------
+            # (C2) LTR: send immediately
             else:
                 processed = self.sa.process_segment(text)
                 if processed:
-                   self.translation_accumulated_text = processed
-                   #translations = self.prepare_translations()
-                   future = asyncio.run_coroutine_threadsafe(
-                       self.prepare_translations_async(),  # the async function
-                       self.loop  # the event loop in main thread
-                   )
-                   translations = future.result()
-                   if translations:
-                       self.send_translations_to_all_listeners(translations["translate"])
+                    self.translation_accumulated_text = processed
+                    self._send_async_translations()
 
-
-
-        self.previous_segment_ready = translate and rtl_language
-
+        # Update state for next call
+        self.previous_segment_ready = (translate and rtl_language)
         return item
+
+    def _is_duplicate_rtl(self) -> bool:
+        """
+        Compares previously finalized text with the currently accumulated text,
+        returning True if the new text is a prefix of the old text.
+        """
+        prev_text = self.previous_translation_accumulated_text.lower().strip()
+        curr_text = self.translation_accumulated_text.lower().strip()
+        return prev_text.startswith(curr_text)
+
+    def _send_async_translations(self):
+        """
+        Offloads translation to the main event loop and synchronously retrieves
+        the result (blocking the current thread). If a result is returned, it's sent
+        to all listeners.
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self.prepare_translations_async(),
+            self.loop
+        )
+        translations = future.result()
+        if translations:
+            self.send_translations_to_all_listeners(translations)
 
     def update_segments(self, segments, duration):
         """

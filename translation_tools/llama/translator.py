@@ -256,5 +256,4 @@ class LlamaTranslator:
             self.buffer_text.append(text)
             if len(self.buffer_text) > 3:
                 self.buffer_text.pop(0)
-        print(f"BUFFER: {self.buffer_text}")
         return translations
