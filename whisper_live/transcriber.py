@@ -204,7 +204,7 @@ class WhisperModel:
         language: Optional[str] = None,
         task: str = "transcribe",
         beam_size: int = 3,
-        best_of: int = 2,
+        best_of: int = 3,
         patience: float = 1.5,
         length_penalty: float = 1,
         repetition_penalty: float = 1.1,

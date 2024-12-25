@@ -24,7 +24,7 @@ class ServeClientBase(object):
         self.exit = False
         self.same_output_threshold = 0
         self.show_prev_out_thresh = 4  # if pause(no output from whisper) show previous output for 4 seconds
-        self.add_pause_thresh = 1  # add a blank to segment list as a pause(no speech) for 2 seconds
+        self.add_pause_thresh = 0   # add a blank to segment list as a pause(no speech) for 2 seconds
         self.transcript = []
         self.send_last_n_segments = 10
         self.all_langs = None
@@ -62,7 +62,7 @@ class ServeClientBase(object):
         of audio frames as they are received. It also ensures that the buffer does not exceed a specified size
         to prevent excessive memory usage.
 
-        If the buffer size exceeds a threshold (45 seconds of audio data), it discards the oldest 30 seconds
+        If the buffer size exceeds a threshold (60 seconds of audio data), it discards the oldest 30 seconds
         of audio data to maintain a reasonable buffer size. If the buffer is empty, it initializes it with the provided
         audio frame. The audio stream buffer is used for real-time processing of audio data for transcription.
 
@@ -71,19 +71,24 @@ class ServeClientBase(object):
 
         """
         self.lock.acquire()
-        if self.frames_np is not None and self.frames_np.shape[0] > 45 * self.RATE:
-            self.frames_offset += 30.0
-            self.frames_np = self.frames_np[int(30 * self.RATE):]
-            # check timestamp offset(should be >= self.frame_offset)
-            # this basically means that there is no speech as timestamp offset hasnt updated
-            # and is less than frame_offset
-            if self.timestamp_offset < self.frames_offset:
-                self.timestamp_offset = self.frames_offset
-        if self.frames_np is None:
-            self.frames_np = frame_np.copy()
-        else:
-            self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
-        self.lock.release()
+        try:
+            # If the buffer exists and exceeds 60 seconds:
+            if self.frames_np is not None and self.frames_np.shape[0] > 60 * self.RATE:
+                self.frames_offset += 30.0
+                self.frames_np = self.frames_np[int(30 * self.RATE):]
+
+                # Ensure timestamp_offset doesn't fall behind frames_offset
+                if self.timestamp_offset < self.frames_offset:
+                    self.timestamp_offset = self.frames_offset
+
+            # If no buffer yet, initialize it with the new frame
+            if self.frames_np is None:
+                self.frames_np = frame_np.copy()
+            else:
+                # Otherwise, append the new frame to the existing buffer
+                self.frames_np = np.concatenate((self.frames_np, frame_np), axis=0)
+        finally:
+            self.lock.release()
 
     def clip_audio_if_no_valid_segment(self):
         """
