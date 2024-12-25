@@ -7,7 +7,6 @@ on:
 
 jobs:
   build-and-push:
-    if: github.event.release.target_commitish == 'deploy-host'
     runs-on: self-hosted
     steps:
       # Step 1: Check out the repository code
