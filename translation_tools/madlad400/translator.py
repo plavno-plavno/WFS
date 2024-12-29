@@ -1,25 +1,13 @@
 import logging
-import time
+
 from typing import Dict, List
-from functools import wraps
+from utils.decorators import timer_decorator
 import ctranslate2
 import transformers
 
 # List of supported languages
 LANGUAGE_ABBREVIATIONS = ["hi", "en", "ar", "de", "fr", "sw"]
 
-def timer_decorator(func):
-    """
-    Decorator to measure and log the execution time of a function.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        logging.debug(f"Execution time for {func.__name__}: {end_time - start_time:.2f} seconds")
-        return result
-    return wrapper
 
 class MultiLingualTranslatorLive:
     def __init__(self, model_path="madlad400-3b", compute_type="int8_float16", device="cuda"):

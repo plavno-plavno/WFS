@@ -3,7 +3,9 @@ import threading
 import json
 import time
 import string
-import asyncio
+
+from embeddings.embeddings import EmbeddingsClient
+from embeddings.rag_retriever import RAGRetriever
 
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.sentence_accumulator import SentenceAccumulator
@@ -43,6 +45,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         super().__init__(client_uid, websocket, server)
         self.translator = translator
         self.transcriber = transcriber
+        self.embedder = EmbeddingsClient()
+        self.ragRetriever = RAGRetriever()
         self.server = server
         self.language = language
         self.task = task
@@ -191,6 +195,19 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(segments):
             self.send_transcription_to_client(segments)
 
+    def get_embeddings_and_rag_thread(self, query:str):
+        embeddings = self.embedder.get_embeddings(
+            query=query,
+            top_k=24
+
+        )
+
+        result=self.ragRetriever.retrieve_context(embeddings,query)
+        self.server.listener_manager.send_message_to_all_listeners(
+            message=result,
+            client_uid=self.client_uid
+        )
+
     def translate_and_send_thread(self):
             translations = self.prepare_translations()
             self.send_translations_to_all_listeners(translations)
@@ -236,8 +253,10 @@ class ServeClientFasterWhisper(ServeClientBase):
                 result = self.transcribe_audio(input_sample)
                 if result is None and self.translation_accumulated_text != "":
                     print(f"[INFO]: No output from Whisper, using previous output: {self.translation_accumulated_text}")
-                    translation_thread = threading.Thread(target=self.translate_and_send_thread, daemon=True)
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
+                                                          args=(self.translation_accumulated_text,), daemon=True)
                     translation_thread.start()
+                    self.translation_accumulated_text=""
 
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
@@ -371,7 +390,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             if rtl_language:
                 # Check duplicates in RTL scenario
                 if not self._is_duplicate_rtl():
-                    translation_thread = threading.Thread(target=self.translate_and_send_thread, daemon=True)
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
                     translation_thread.start()
                 else:
                     print(" **** CAUGHT DUPLICATE (RTL) **** ")
@@ -392,7 +411,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 processed = self.sa.process_segment(text)
                 if processed:
                     self.translation_accumulated_text = processed
-                    translation_thread = threading.Thread(target=self.translate_and_send_thread, daemon=True)
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
                     translation_thread.start()
 
         # Update state for next call

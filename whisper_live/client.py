@@ -66,7 +66,7 @@ class Client:
             self.task = "translate"
 
         if host is not None and port is not None:
-            socket_url = f"wss://{host}:{port}"
+            socket_url = f"ws://{host}:{port}"
             self.client_socket = websocket.WebSocketApp(
                 socket_url,
                 on_open=lambda ws: self.on_open(ws),
@@ -351,7 +351,7 @@ class TranscriptionTeeClient:
         for client in self.clients:
             client.write_srt_file(client.srt_file_path)
 
-    def multicast_packet(self, audio_array, speaker_lang = 'ru', all_langs = ["en", "fa", "ur", "ru", "no", "ar"], unconditional=False):
+    def multicast_packet(self, audio_array, speaker_lang = 'en', all_langs = ["en", "fa", "ur", "ru", "no", "ar"], unconditional=False):
         """
         Sends an identical packet via all clients.
 
