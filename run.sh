@@ -9,7 +9,7 @@ SSL_PASSPHRASE=""  # Set this to your SSL key passphrase if needed
 if [ -x "/opt/conda/bin/python" ]; then
     CMD="/opt/conda/bin/python"
 else
-    CMD="python3"
+    CMD="python"
 fi
 
 # Initialize SSL options
