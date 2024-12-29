@@ -11,7 +11,7 @@ class CerebrasTranslator(LlamaTranslator):
 
 class LoadBalancedTranslator:
     def __init__(self, translators: List[Any] = None):
-        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
+        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-tem9deprv95yxkr552c8fvhnm54xftd3m5t4kp6n3kdk53pf")
         self.counter = 0
         self.buffer_text = []
         if translators:
