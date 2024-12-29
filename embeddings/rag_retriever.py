@@ -62,9 +62,7 @@ class RAGRetriever:
                 top_p=1.0  # Adjust if you want more randomness
             )
             response_content = completion.choices[0].message.content.strip()
-
             response_json = json.loads(response_content)
-            print(response_json)
             return response_json
         except json.JSONDecodeError:
             logging.error("Failed to decode JSON response.")
