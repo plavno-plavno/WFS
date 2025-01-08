@@ -10,7 +10,7 @@ class RAGRetriever:
     def __init__(
             self,
         ):
-        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-tem9deprv95yxkr552c8fvhnm54xftd3m5t4kp6n3kdk53pf")
+        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-wdpk43pkx2n439jc9c8pf9wy5vrhtje6c8pyfcyvy9x3jnhc")
         self.client =Cerebras(api_key = CEREBRAS_API_KEY)
         self.model = "llama3.3-70b"
 
@@ -58,7 +58,7 @@ class RAGRetriever:
                 messages=messages,
                 model=self.model,
                 response_format={"type": "json_object"},
-                temperature=0.2,
+                temperature=0.3,
                 top_p=1.0  # Adjust if you want more randomness
             )
             response_content = completion.choices[0].message.content.strip()

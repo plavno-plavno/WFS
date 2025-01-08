@@ -4,6 +4,7 @@ import json
 import time
 import string
 
+from embeddings.avatar_poster import AvatarPoster
 from embeddings.embeddings import EmbeddingsClient
 from embeddings.rag_retriever import RAGRetriever
 
@@ -67,7 +68,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.translation_accumulated_text = ''
         self.translation_start_time = "0.0"
         self.translation_end_time = "0.0"
-        
+        self.avatar_poster = AvatarPoster(client_id=client_uid, lang="ru")
 
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
@@ -198,19 +199,12 @@ class ServeClientFasterWhisper(ServeClientBase):
     def get_embeddings_and_rag_thread(self, query:str):
         embeddings = self.embedder.get_embeddings(
             query=query,
-            top_k=24
-
+            top_k=28
         )
 
         result=self.ragRetriever.retrieve_context(embeddings,query)
-        self.server.listener_manager.send_message_to_all_listeners(
-            message=result,
-            client_uid=self.client_uid
-        )
+        self.avatar_poster.send_text_request(text=result.response)
 
-    def translate_and_send_thread(self):
-            translations = self.prepare_translations()
-            self.send_translations_to_all_listeners(translations)
 
     def speech_to_text(self):
         """
@@ -308,29 +302,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                     print(f" - {lang.upper()} - {translated_text}")
             else:
                 print(f"{k.upper()} - {v}")
-
-    def send_translations_to_all_listeners(self, translations):
-        """
-        Build translation message, display it,
-        and attempt to broadcast to all listeners.
-        """
-        message = {
-            "id": self.translation_id,
-            "start": self.translation_start_time,
-            "end": self.translation_end_time,
-            "translate": translations,
-        }
-
-        self.display_translation_info(message)
-
-        try:
-            self.server.listener_manager.send_message_to_all_listeners(
-                message=message,
-                client_uid=self.client_uid
-            )
-            self.translation_id += 1
-        except Exception as e:
-            logging.error('[ERROR SEND TO LISTENERS - LISTENER CONNECTION LOST]')
 
     def is_rtl(self):
         return self.speaker_lang in ['ar', 'he', 'fa', 'ur', 'ps', 'sd']
