@@ -23,6 +23,7 @@ COPY translation_tools /app/translation_tools
 COPY certificates /app/certificates
 COPY madlad400-3b /app/madlad400-3b
 COPY embeddings /app/embeddings
+COPY utils /app/utils
 COPY *.sh /app/
 RUN chmod +x /app/*.sh
 
