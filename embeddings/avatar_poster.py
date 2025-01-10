@@ -12,13 +12,11 @@ class AvatarPoster:
 
     def __init__(self,
                  client_id: str,
-                 lang: str = "en",
                  base_url: Optional[str] = None):
         """
         Initialize the two URLs and store payload data.
 
         :param client_id: The client ID or identifier.
-        :param lang: The language code (defaults to 'en').
         :param base_url: The base URL for the requests
                          (defaults to http://47.186.25.253:50956).
         """
@@ -28,14 +26,8 @@ class AvatarPoster:
         # Build full endpoints from the base URL
         self.stop_url = f"{self.base_url}/stop"
         self.text_url = f"{self.base_url}/text"
-
-        # Base payload for the normal text request
-        self.normal_payload = {
-            "client_id": client_id,
-            "lang": lang
-        }
         # Base payload for the stop request
-        self.stop_payload = {
+        self.normal_payload = self.stop_payload = {
             "client_id": client_id
         }
 
@@ -52,7 +44,7 @@ class AvatarPoster:
             print(f"Error sending request to {url}: {e}")
             return None
 
-    def send_text_request(self, text: str) -> Tuple[Optional[requests.Response], Optional[requests.Response]]:
+    def send_text_request(self, text: str, lang: str) -> Tuple[Optional[requests.Response], Optional[requests.Response]]:
         """
         1) Sends the 'stop' payload to the /stop endpoint.
         2) Sends the normal text payload (with 'text', 'client_id', and 'lang') to the /text endpoint.
@@ -66,6 +58,7 @@ class AvatarPoster:
         # 2) Normal request with text
         payload_with_text = dict(self.normal_payload)
         payload_with_text["text"] = text
+        payload_with_text["lang"] = lang
         text_response = self._send_request(self.text_url, payload_with_text)
 
         return stop_response, text_response

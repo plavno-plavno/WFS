@@ -68,7 +68,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.translation_accumulated_text = ''
         self.translation_start_time = "0.0"
         self.translation_end_time = "0.0"
-        self.avatar_poster = AvatarPoster(client_id=client_uid, lang="ru")
+        self.avatar_poster = AvatarPoster(client_id=client_uid)
 
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
@@ -207,7 +207,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         response = result.get("response", None)
         if response is not None:
             print(response)
-            avatar_response=self.avatar_poster.send_text_request(text=response)
+            avatar_response=self.avatar_poster.send_text_request(text=response,lang=self.speaker_lang)
             print(avatar_response)
 
 
