@@ -15,7 +15,7 @@ class RAGRetriever:
         self.model = "llama3.3-70b"
 
     @timer_decorator
-    def retrieve_context(self, documents: List[Dict[str, str]], user_input: str) -> str:
+    def retrieve_context(self, documents: List[Dict[str, str]], user_input: str) -> dict:
         """
         Generates a response to the user's question based on provided documents.
 

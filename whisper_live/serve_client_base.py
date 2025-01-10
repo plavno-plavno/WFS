@@ -30,6 +30,7 @@ class ServeClientBase(object):
         self.all_langs = None
         self.speaker_lang = None
         self.server = server
+        self.index = '_9079dbe1_3b33_49d8_831b_bd75c70bfeca'
 
         # text formatting
         self.pick_previous_segments = 2
@@ -50,9 +51,9 @@ class ServeClientBase(object):
         if speaker_lang:
             self.speaker_lang = speaker_lang
 
-    def set_all_langs(self, all_langs):
-        if all_langs:
-            self.all_langs = all_langs
+    def set_index(self, index):
+        if index:
+            self.index = index
 
     def add_frames(self, frame_np):
         """

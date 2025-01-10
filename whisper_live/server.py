@@ -109,14 +109,14 @@ class TranscriptionServer:
         try:
             parsed_data = json.loads(data)
             speaker_lang = parsed_data.get('speakerLang')
-            all_langs = parsed_data.get('allLangs')
+            index = parsed_data.get('index')
             audio_base64 = parsed_data.get('audio')
             if audio_base64:
                 # Decode base64 to bytes
                 audio_bytes = base64.b64decode(audio_base64)
                 # Convert bytes to numpy array
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                return audio_np, speaker_lang, all_langs
+                return audio_np, speaker_lang, index
             else:
                 return False, None, None
         except json.JSONDecodeError as e:
@@ -149,7 +149,7 @@ class TranscriptionServer:
             return False
 
     def process_audio_frames(self, websocket):
-        frame_np, speaker_lang, all_langs = self.get_audio_from_websocket(websocket)
+        frame_np, speaker_lang, index = self.get_audio_from_websocket(websocket)
         if type(frame_np) == bool and frame_np:
             return True
         client = self.speaker_manager.get_client(websocket)
@@ -158,7 +158,7 @@ class TranscriptionServer:
             return False
         
         client.set_speaker_lang(speaker_lang)
-        client.set_all_langs(all_langs)
+        client.set_index(index)
         client.add_frames(frame_np)
         return True
 

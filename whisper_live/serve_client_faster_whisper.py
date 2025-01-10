@@ -199,11 +199,16 @@ class ServeClientFasterWhisper(ServeClientBase):
     def get_embeddings_and_rag_thread(self, query:str):
         embeddings = self.embedder.get_embeddings(
             query=query,
-            top_k=28
+            top_k=28,
+            index_name=self.index
         )
 
         result=self.ragRetriever.retrieve_context(embeddings,query)
-        self.avatar_poster.send_text_request(text=result.response)
+        response = result.get("response", None)
+        if response is not None:
+            print(response)
+            avatar_response=self.avatar_poster.send_text_request(text=response)
+            print(avatar_response)
 
 
     def speech_to_text(self):
@@ -254,7 +259,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
                 if result is None or self.language is None:
                     self.timestamp_offset += duration
-                    time.sleep(0.25)  # wait for voice activity, result is None when no voice activity
+                    time.sleep(0.1)  # wait for voice activity, result is None when no voice activity
                     continue
                 self.handle_transcription_output(result, duration)
 
@@ -275,13 +280,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         # Set the stop event to signal the thread to exit
         self.stop_event.set()
 
-        # Wait for the thread to finish execution
-        self.trans_thread.join(timeout=3)  # Adjust timeout as needed
-
-        if self.trans_thread.is_alive():
-            print("Thread did not terminate within the timeout period.")
-        else:
-            print("Transcription thread has been successfully stopped.")
 
     def display_translation_info(self, message: dict):
 
@@ -382,8 +380,8 @@ class ServeClientFasterWhisper(ServeClientBase):
                 processed = self.sa.process_segment(text)
                 if processed:
                     self.translation_accumulated_text = processed
-                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
-                    translation_thread.start()
+                    #translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
+                    #translation_thread.start()
 
         # Update state for next call
         self.previous_segment_ready = (translate and rtl_language)
