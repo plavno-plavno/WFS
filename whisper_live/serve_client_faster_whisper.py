@@ -54,8 +54,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.sa = SentenceAccumulator()
         self.sa_arabic = SentenceAccumulatorArabic()
         self.stop_event = threading.Event()
-
-        self.loop = server.loop
         self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
 

@@ -18,6 +18,12 @@ class ClientManager:
         self.max_clients = max_clients
         self.max_connection_time = max_connection_time
 
+    def get_client_count(self):
+        """
+        Returns the current number of connected clients.
+        """
+        return len(self.clients)
+
     def add_client(self, websocket, client):
         """
         Adds a client and their connection start time to the tracking dictionaries.
