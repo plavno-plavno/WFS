@@ -173,18 +173,19 @@ class LlamaTranslator:
         self.client = client
         self.own_buffer = buffer_text is None
         self.buffer_text = buffer_text if buffer_text else []
-        
+
     def get_example_response(self, tgt_langs, language_examples=LANGUAGE_EXAMPLES):
-        """
-        Returns a single string that contains JSON, with quotes escaped.
-        Example output: "{\"translate\":{\"fr\":\"d'accord\"}}"
-        """
         translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
-        response_dict = {
-            "translate": translations
-        }            
-        json_str = json.dumps(response_dict, ensure_ascii=False)    
-        escaped_json_str = json.dumps(json_str)
+        response_dict = {"translate": translations}
+
+        # First dump: produces non-ASCII-escaped JSON
+        json_str = json.dumps(response_dict, ensure_ascii=False)
+
+        # Manually escape only double-quotes and backslashes:
+        # (This is NOT the same as re-running json.dumps!)
+        escaped_json_str = json_str.replace('\\', '\\\\').replace('"', '\\"')
+
+        # Return that single line with quotes escaped but real characters still intact
         return escaped_json_str
 
     def split_into_chunks(self, array, chunk_size=30):
