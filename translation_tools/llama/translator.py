@@ -175,11 +175,23 @@ class LlamaTranslator:
         self.buffer_text = buffer_text if buffer_text else []
         
     def get_example_response(self, tgt_langs, language_examples=LANGUAGE_EXAMPLES):
-        translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
-        response = {
-            "translate": translations
-        }
-        return json.dumps(response, ensure_ascii=False, indent=4)
+    """
+    Returns a single string that contains JSON, with quotes escaped.
+    Example output: "{\"translate\":{\"fr\":\"d'accord\"}}"
+    """
+    # 1) Build the Python dict
+    translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
+    response_dict = {
+        "translate": translations
+    }
+
+    # 2) Convert the dict to a JSON string (with French accents / apostrophes preserved)
+    #    ensure_ascii=False means we keep non-ASCII chars without escaping like \u00e9.
+    json_str = json.dumps(response_dict, ensure_ascii=False)
+
+    # 3) Escape all quotes again so that the *returned* value is literally: "{\"translate\":{...}}"
+    escaped_json_str = json.dumps(json_str)
+    return escaped_json_str
 
     def split_into_chunks(self, array, chunk_size=30):
         return [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
