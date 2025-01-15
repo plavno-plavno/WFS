@@ -195,7 +195,7 @@ class LlamaTranslator:
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
         Important rules:
-        1. Return strict JSON format with ISO 2-letter language codes
+        1. Return strict JSON format as provided in a example response with ISO 2-letter language codes
         2. Keep exact structure as in example
         3. Maintain original meaning without additions
         4. Include all specified target languages
