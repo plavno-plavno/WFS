@@ -28,5 +28,13 @@ else
     echo "SSL files not found. Running without SSL support."
 fi
 
+if command -v tmux > /dev/null 2>&1; then
+    # Start a new tmux session named "ssh_tmux"
+    tmux new -s ssh_tmux
+else
+    echo "tmux is not installed."
+    exit 1
+fi
+
 # Run the Python server script with appropriate SSL options
-eval "$CMD run_server.py --port 9090 --backend faster_whisper -fw 'faster-whisper-large-v3' $SSL_OPTIONS" >> run_server.log 2>&1
+ eval "$CMD run_server.py --port 9090 --backend faster_whisper -fw 'faster-whisper-large-v3' $SSL_OPTIONS"
