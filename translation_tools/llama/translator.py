@@ -186,8 +186,10 @@ class LlamaTranslator:
 
     @timer_decorator
     @retry_on_error(max_retries=4, retry_delay=0.50)
-    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
-        context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
+    def translate(self, text: str, src_lang: str | None = None, tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
+        src_lang_context = f"from {src_lang}" if src_lang else ""
+        src_tgt_langs = f"to {', '.join(tgt_langs) if tgt_langs else ''}"
+        context = f"""Expert translator: Translate {src_lang_context} {src_tgt_langs}.
         Important rules:
         1. Return strict JSON format with ISO 2-letter language codes
         2. Keep exact structure as in example
@@ -243,9 +245,7 @@ class LlamaTranslator:
         )
         return completion.choices[0].message.content
 
-    def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
-        if tgt_langs is None:
-            tgt_langs = ["ar", "en", "fa", "ru", "ur"]
+    def get_translations(self, text: str, src_lang: str | None = None, tgt_langs: List[str] = None) -> Dict[str, str]:
         translations = {"translate": {}}
         tgt_lang_chunks = self.split_into_chunks(tgt_langs)
         for tgt_lang_chunk in tgt_lang_chunks:
