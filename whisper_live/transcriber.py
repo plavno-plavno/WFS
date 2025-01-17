@@ -363,14 +363,30 @@ class WhisperModel:
         encoder_output = None
         all_language_probs = None
 
-        # if not self.model.is_multilingual and language != "en":
-        #     self.logger.warning(
-        #         "The current model is English-only but the language parameter is set to '%s'; "
-        #         "using 'en' instead." % language
-        #     )
-        #     language = "en"
+        if not self.model.is_multilingual and language != "en":
+            self.logger.warning(
+                "The current model is English-only but the language parameter is set to '%s'; "
+                "using 'en' instead." % language
+            )
+            language, language_probability = "en", 1
 
-        language_probability = 1
+        elif self.model.is_multilingual and language is None:
+            detected_language, all_language_probs = self.model.detect_language(audio)
+            self.logger.info("Detected language: %s", detected_language)
+
+            max_prob_language, max_probability = max(all_language_probs.items(), key=lambda x: x[1])
+
+            if max_probability > 0.5:
+                language = max_prob_language
+                language_probability = max_probability
+                self.logger.info("Detected language: %s with probability: %.2f", detected_language, max_probability)
+            else:
+                language = "en"
+                self.logger.warning("No language detected with probability > 0.5. Falling back to English ('en').")
+
+                language_probability = 1
+        else:
+            language_probability = 1
 
         tokenizer = Tokenizer(
             self.hf_tokenizer,
