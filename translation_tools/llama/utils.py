@@ -38,7 +38,7 @@ class LoadBalancedTranslator:
                                    buffer_text=self.buffer_text)
             ]
 
-    def get_translations(self, text: str, src_lang: str | None = None, tgt_langs: List[str] = None) -> Dict[str, str]:
+    def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
         translator_index = self.counter % len(self.translators)
         translator = self.translators[translator_index]
         translations = translator.get_translations(text, src_lang, tgt_langs)
