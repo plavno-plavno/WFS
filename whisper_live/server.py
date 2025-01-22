@@ -75,7 +75,7 @@ class TranscriptionServer:
 
         client = ServeClientFasterWhisper(
                 websocket,
-                language=options.get('language', 'en'),
+                language=options.get('language', None),
                 task=options.get('task', "transcribe"),
                 client_uid=options.get('uid', 'client-id-not-received'),
                 model=options.get('model', "large-v3"),

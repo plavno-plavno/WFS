@@ -370,7 +370,34 @@ class WhisperModel:
             )
             language = "en"
 
-        language_probability = 1
+        if language is None:
+            max_length = 3000
+
+            diff_length = max_length - features.shape[-1]
+            if diff_length > 0:
+                cropped_features = np.concatenate(
+                    [features, np.full((features.shape[0], diff_length), -1.5, dtype=features.dtype)],
+                    axis=1
+                )
+            else:
+                cropped_features = features[..., :max_length]
+
+            cropped_features = np.ascontiguousarray(cropped_features)
+            f_storage = ctranslate2.StorageView.from_array(np.expand_dims(cropped_features, axis=0))
+
+            all_language_probs = self.model.detect_language(features=f_storage)
+
+            sorted_languages = sorted(all_language_probs[0], key=lambda x: x[1], reverse=True)
+            language, language_probability = sorted_languages[0]
+            language = language.strip('<|>').strip()
+            self.logger.info(f"Detected {language}, with {language_probability} probability")
+        else:
+            language_probability = 1
+
+        if not language:
+            self.logger.warning(f"Failed to detect language. Setup english by default")
+            language = 'en'
+            language_probability = 1
 
         tokenizer = Tokenizer(
             self.hf_tokenizer,
