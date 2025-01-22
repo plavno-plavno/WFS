@@ -394,11 +394,6 @@ class WhisperModel:
         else:
             language_probability = 1
 
-        if not language:
-            self.logger.warning(f"Failed to detect language. Setup english by default")
-            language = 'en'
-            language_probability = 1
-
         tokenizer = Tokenizer(
             self.hf_tokenizer,
             self.model.is_multilingual,
