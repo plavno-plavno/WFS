@@ -14,6 +14,18 @@ class RAGRetriever:
         self.client =Cerebras(api_key = CEREBRAS_API_KEY)
         self.model = "llama3.3-70b"
 
+    def format_book(self, book: Dict[str, any]) -> str:
+        meta = book.get("meta", {})
+        context = book.get("context", "")
+
+        meta_text = "\n".join([
+            f"title: {meta.get('title', '')}",
+            f"description: {meta.get('description', '')}",
+            f"author: {meta.get('author', '')}",
+            f"genres: {meta.get('genres', '')}"
+        ])
+        return f"{meta_text}\n\n{context}"
+
     @timer_decorator
     def retrieve_context(self, documents: List[Dict[str, str]], user_input: str) -> dict:
         """
@@ -26,7 +38,17 @@ class RAGRetriever:
         Returns:
             str: The generated response extracted from the JSON response.
         """
-        combined_text = "\n\n".join(doc['pageContent'] for doc in documents)
+        combined_text = []
+
+        if isinstance(documents, dict):
+            combined_text.append(self.format_book(documents))
+        elif isinstance(documents, list):
+            for book in documents:
+                combined_text.append(self.format_book(book))
+        else:
+            raise ValueError("Unsupported data format")
+
+        combined_text = "\n\n".join(combined_text).strip()
 
         context = f"""You are a book expert and librarian. Please respond to the user's question below using the provided context.
 

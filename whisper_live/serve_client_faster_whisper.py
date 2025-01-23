@@ -203,13 +203,12 @@ class ServeClientFasterWhisper(ServeClientBase):
             index_name=self.index
         )
 
-        result=self.ragRetriever.retrieve_context(embeddings,query)
+        result = self.ragRetriever.retrieve_context(embeddings, query)
         response = result.get("response", None)
         if response is not None:
             print(response)
-            avatar_response=self.avatar_poster.send_text_request(text=response,lang=self.speaker_lang)
+            avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
             print(avatar_response)
-
 
     def speech_to_text(self):
         """
