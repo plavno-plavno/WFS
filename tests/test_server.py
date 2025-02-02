@@ -16,25 +16,25 @@ from whisper.normalizers import EnglishTextNormalizer
 class TestTranscriptionServerInitialization(unittest.TestCase):
     def test_initialization(self):
         server = TranscriptionServer()
-        self.assertEqual(server.client_manager.max_clients, 4)
-        self.assertEqual(server.client_manager.max_connection_time, 600)
-        self.assertDictEqual(server.client_manager.clients, {})
-        self.assertDictEqual(server.client_manager.start_times, {})
+        self.assertEqual(server.speaker_manager.max_clients, 4)
+        self.assertEqual(server.speaker_manager.max_connection_time, 600)
+        self.assertDictEqual(server.speaker_manager.clients, {})
+        self.assertDictEqual(server.speaker_manager.start_times, {})
 
 
 class TestGetWaitTime(unittest.TestCase):
     def setUp(self):
         self.server = TranscriptionServer()
-        self.server.client_manager.start_times = {
+        self.server.speaker_manager.start_times = {
             'client1': time.time() - 120,
             'client2': time.time() - 300
         }
-        self.server.client_manager.max_connection_time = 600
+        self.server.speaker_manager.max_connection_time = 600
 
     def test_get_wait_time(self):
-        expected_wait_time = (600 - (time.time() - self.server.client_manager.start_times['client2'])) / 60
-        print(self.server.client_manager.get_wait_time(), expected_wait_time)
-        self.assertAlmostEqual(self.server.client_manager.get_wait_time(), expected_wait_time, places=2)
+        expected_wait_time = (600 - (time.time() - self.server.speaker_manager.start_times['client2'])) / 60
+        print(self.server.speaker_manager.get_wait_time(), expected_wait_time)
+        self.assertAlmostEqual(self.server.speaker_manager.get_wait_time(), expected_wait_time, places=2)
 
 
 class TestServerConnection(unittest.TestCase):
@@ -63,7 +63,7 @@ class TestServerConnection(unittest.TestCase):
         with self.assertLogs(level="ERROR"):
             self.server.recv_audio(mock_websocket, "faster_whisper")
 
-        self.assertNotIn(mock_websocket, self.server.client_manager.clients)
+        self.assertNotIn(mock_websocket, self.server.speaker_manager.clients)
 
 
 class TestServerInferenceAccuracy(unittest.TestCase):

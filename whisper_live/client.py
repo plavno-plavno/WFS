@@ -1,7 +1,8 @@
 import os
 import shutil
 import wave
-
+import ssl
+import base64
 import logging
 import numpy as np
 import pyaudio
@@ -15,39 +16,39 @@ import whisper_live.utils as utils
 
 
 class Client:
-    """
-    Handles communication with a server using WebSocket.
-    """
     INSTANCES = {}
     END_OF_AUDIO = "END_OF_AUDIO"
 
     def __init__(
-        self,
-        host=None,
-        port=None,
-        lang=None,
-        translate=False,
-        model="small",
-        srt_file_path="output.srt",
-        use_vad=True,
-        log_transcription=True
+            self,
+            uid=str(uuid.uuid4()),
+            host=None,
+            port=None,
+            lang=None,
+            translate=False,
+            model="large-v3",
+            srt_file_path="output.srt",
+            use_vad=True,
+            log_transcription=True,
+            ignore_ssl_cert=False  # New parameter to control SSL verification
     ):
         """
         Initializes a Client instance for audio recording and streaming to a server.
 
         If host and port are not provided, the WebSocket connection will not be established.
         When translate is True, the task will be set to "translate" instead of "transcribe".
-        he audio recording starts immediately upon initialization.
+        Audio recording starts immediately upon initialization.
 
         Args:
             host (str): The hostname or IP address of the server.
             port (int): The port number for the WebSocket server.
             lang (str, optional): The selected language for transcription. Default is None.
             translate (bool, optional): Specifies if the task is translation. Default is False.
+            ignore_ssl_cert (bool, optional): Specifies if SSL certificate should be ignored.
         """
         self.recording = False
-        self.task = "transcribe"
-        self.uid = str(uuid.uuid4())
+        self.task = "translate" if translate else "transcribe"
+        self.uid = uid
         self.waiting = False
         self.last_response_received = None
         self.disconnect_if_no_response_for = 15
@@ -59,11 +60,10 @@ class Client:
         self.last_segment = None
         self.last_received_segment = None
         self.log_transcription = log_transcription
-
+        self.audio_bytes = None
+        self.ignore_ssl_cert = ignore_ssl_cert  # Store the SSL flag
         if translate:
             self.task = "translate"
-
-        self.audio_bytes = None
 
         if host is not None and port is not None:
             socket_url = f"ws://{host}:{port}"
@@ -76,16 +76,18 @@ class Client:
                     ws, close_status_code, close_msg
                 ),
             )
+
+            # Start WebSocket client with SSL options based on the ignore_ssl_cert flag
+            sslopt = {"cert_reqs": ssl.CERT_NONE} if self.ignore_ssl_cert else None
+            self.ws_thread = threading.Thread(target=self.client_socket.run_forever, kwargs={"sslopt": sslopt})
+            self.ws_thread.setDaemon(True)
+            self.ws_thread.start()
+
         else:
             print("[ERROR]: No host or port specified.")
             return
 
         Client.INSTANCES[self.uid] = self
-
-        # start websocket client in a thread
-        self.ws_thread = threading.Thread(target=self.client_socket.run_forever)
-        self.ws_thread.setDaemon(True)
-        self.ws_thread.start()
 
         self.transcript = []
         print("[INFO]: * recording")
@@ -105,6 +107,8 @@ class Client:
     def process_segments(self, segments):
         """Processes transcript segments."""
         text = []
+        if isinstance(segments, dict):
+            segments = [segments]
         for i, seg in enumerate(segments):
             if not text or text[-1] != seg["text"]:
                 text.append(seg["text"])
@@ -121,7 +125,7 @@ class Client:
 
         if self.log_transcription:
             # Truncate to last 3 entries for brevity.
-            text = text[-3:]
+            text = text[-5:]
             utils.clear_screen()
             utils.print_transcript(text)
 
@@ -172,6 +176,7 @@ class Client:
 
     def on_error(self, ws, error):
         print(f"[ERROR] WebSocket Error: {error}")
+        print(f"[DEBUG] Trying to connect to: {ws.url}")
         self.server_error = True
         self.error_message = error
 
@@ -346,7 +351,7 @@ class TranscriptionTeeClient:
         for client in self.clients:
             client.write_srt_file(client.srt_file_path)
 
-    def multicast_packet(self, packet, unconditional=False):
+    def multicast_packet(self, audio_array, speaker_lang = 'ru', all_langs = ["en", "fa", "ur", "ru", "no", "ar"], unconditional=False):
         """
         Sends an identical packet via all clients.
 
@@ -354,9 +359,17 @@ class TranscriptionTeeClient:
             packet (bytes): The audio data packet in bytes to be sent.
             unconditional (bool, optional): If true, send regardless of whether clients are recording.  Default is False.
         """
+        audio_base64 = base64.b64encode(audio_array).decode('utf-8')
+        packet = {
+            "speakerLang": speaker_lang,
+            "allLangs": all_langs,
+            "audio": audio_base64
+        }
+
+        json_packet = json.dumps(packet)
         for client in self.clients:
             if (unconditional or client.recording):
-                client.send_packet_to_server(packet)
+                client.send_packet_to_server(json_packet)
 
     def play_file(self, filename):
         """
@@ -397,7 +410,7 @@ class TranscriptionTeeClient:
 
                 for client in self.clients:
                     client.wait_before_disconnect()
-                self.multicast_packet(Client.END_OF_AUDIO.encode('utf-8'), True)
+                self.multicast_packet(Client.END_OF_AUDIO.encode('utf-8'), unconditional=True)
                 self.write_all_clients_srt()
                 self.stream.close()
                 self.close_all_clients()
@@ -675,14 +688,15 @@ class TranscriptionClient(TranscriptionTeeClient):
         port,
         lang=None,
         translate=False,
-        model="small",
+        model="large-v3",
         use_vad=True,
         save_output_recording=False,
         output_recording_filename="./output_recording.wav",
         output_transcription_path="./output.srt",
         log_transcription=True,
+        ignore_ssl_cert=False,
     ):
-        self.client = Client(host, port, lang, translate, model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription)
+        self.client = Client(host=host, port= port, lang = lang, translate=translate, model=model, srt_file_path=output_transcription_path, use_vad=use_vad, log_transcription=log_transcription,ignore_ssl_cert=ignore_ssl_cert)
         if save_output_recording and not output_recording_filename.endswith(".wav"):
             raise ValueError(f"Please provide a valid `output_recording_filename`: {output_recording_filename}")
         if not output_transcription_path.endswith(".srt"):
