@@ -178,6 +178,7 @@ class ServeClientBase(object):
 
         except Exception as e:
             logging.error('[ERROR SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN]',)
+            logging.error(e)
             client = self.server.speaker_manager.get_client(self.websocket)
             if client and not isinstance(client, bool):
                 print('Trying to CLEAN UP')

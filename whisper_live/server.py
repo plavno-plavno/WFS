@@ -44,8 +44,8 @@ class TranscriptionServer:
 
     def __init__(self):
         self.transcriber = None
-        self.speaker_manager = SpeakerManager(max_clients=6)
-        self.listener_manager = ListenerManager()
+        self.speaker_manager = SpeakerManager(max_clients=4)
+        self.listener_manager = ListenerManager(max_clients=64)
         self.use_vad = True
         self.single_model = False
         USE_MADLAD = os.getenv("USE_MADLAD", "false").lower() == "true"

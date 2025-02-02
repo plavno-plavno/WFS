@@ -202,6 +202,7 @@ class LlamaTranslator:
         4. Include all specified target languages
         5. Use previous context only for reference: < {" ".join(self.buffer_text)} > 
         6. Ensure that any fragments of sentences that appear mistakenly from previous phrases are removed to maintain coherence and accuracy in translation.
+        8. NEVER USE WORD 'diety'.
 
         7.Key phrases as recommendations on how they should be translated:
             "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",
