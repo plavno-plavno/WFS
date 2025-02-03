@@ -196,15 +196,20 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(segments):
             self.send_transcription_to_client(segments)
 
-    def get_embeddings_and_rag_thread(self, query:str):
+    def get_embeddings_and_rag_thread(self, query: str):
+        self.avatar_poster.send_stop_request()
+
         embeddings = self.embedder.get_embeddings(
             query=query,
-            top_k=28,
+            top_k=26,
             index_name=self.index
         )
 
-        result = self.ragRetriever.retrieve_context(embeddings, query)
-        response = result.get("response", None)
+        result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
+
+        # cerebras returns str 'I cant process this reques at  this time' when recieve an error
+        response = result if isinstance(result, str) else result.get("response", None)
+
         if response is not None:
             print(response)
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
@@ -379,8 +384,9 @@ class ServeClientFasterWhisper(ServeClientBase):
                 processed = self.sa.process_segment(text)
                 if processed:
                     self.translation_accumulated_text = processed
-                    #translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
-                    #translation_thread.start()
+                    # temp uncommented because comment 388, 389 lines breaks avatar
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
+                    translation_thread.start()
 
         # Update state for next call
         self.previous_segment_ready = (translate and rtl_language)

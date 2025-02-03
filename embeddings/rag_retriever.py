@@ -14,9 +14,10 @@ class RAGRetriever:
         self.client =Cerebras(api_key = CEREBRAS_API_KEY)
         self.model = "llama3.3-70b"
 
-    def format_book(self, book: Dict[str, any]) -> str:
+    def format_book(self, book: Dict[str, any]) -> dict:
         meta = book.get("meta", {})
         context = book.get("context", "")
+        context = context.replace("\n", " ").replace("--", " ")
 
         meta_text = "\n".join([
             f"title: {meta.get('title', '')}",
@@ -24,10 +25,10 @@ class RAGRetriever:
             f"author: {meta.get('author', '')}",
             f"genres: {meta.get('genres', '')}"
         ])
-        return f"{meta_text}\n\n{context}"
+        return {'meta': meta_text, 'context': context}
 
     @timer_decorator
-    def retrieve_context(self, documents: List[Dict[str, str]], user_input: str) -> dict:
+    def retrieve_context(self, documents: List[Dict[str, str]], user_input: str, lang: str = 'en') -> dict:
         """
         Generates a response to the user's question based on provided documents.
 
@@ -48,16 +49,18 @@ class RAGRetriever:
         else:
             raise ValueError("Unsupported data format")
 
-        combined_text = "\n\n".join(combined_text).strip()
+        combined_text = "\n\n".join(
+            [f"**ADDITIONAL INFO:**\n{book['meta']}\n\n**CONTEXT:**\n{book['context']}" for book in combined_text]
+        ).strip()
 
         context = f"""You are a book expert and librarian. Please respond to the user's question below using the provided context.
 
-    **Important Rules:**
+    **Important Rules (STRICT COMPLIANCE REQUIRED):**
     1. If the context does not contain the close information use your knowledge about book asked, otherwise simply respond with "I don't know"
     2. Keep your answer concise, not less then 100 words, but not exceeding 200 words.
-    3. Respond with JSON format only {{"response":"*response string here*"}}
+    3. **Respond with JSON format only {{"response":"*response string here*"}}**
+    4. **All responses must be translated into {lang}. No exceptions.**
 
-    **CONTEXT:**
     {combined_text}
 
     **USER QUESTION:**

@@ -44,21 +44,26 @@ class AvatarPoster:
             print(f"Error sending request to {url}: {e}")
             return None
 
-    def send_text_request(self, text: str, lang: str) -> Tuple[Optional[requests.Response], Optional[requests.Response]]:
+    def send_stop_request(self):
         """
         1) Sends the 'stop' payload to the /stop endpoint.
-        2) Sends the normal text payload (with 'text', 'client_id', and 'lang') to the /text endpoint.
+
+        :return: A tuple (stop_response).
+        """
+        return self._send_request(self.stop_url, self.stop_payload)
+
+    def send_text_request(self, text: str, lang: str) -> Optional[requests.Response]:
+        """
+        1) Sends the normal text payload (with 'text', 'client_id', and 'lang') to the /text endpoint.
 
         :param text: The text content you want to send.
-        :return: A tuple (stop_response, text_response).
+        :return: A tuple (text_response).
         """
-        # 1) Stop request
-        stop_response = self._send_request(self.stop_url, self.stop_payload)
 
-        # 2) Normal request with text
+        # 1) Normal request with text
         payload_with_text = dict(self.normal_payload)
         payload_with_text["text"] = text
         payload_with_text["lang"] = lang
         text_response = self._send_request(self.text_url, payload_with_text)
 
-        return stop_response, text_response
+        return text_response
