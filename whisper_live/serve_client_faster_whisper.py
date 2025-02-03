@@ -7,7 +7,6 @@ import asyncio
 
 from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.sentence_accumulator import SentenceAccumulator
-from whisper_live.sentence_accumulator_arabic import SentenceAccumulatorArabic
 
 class ServeClientFasterWhisper(ServeClientBase):
     SINGLE_MODEL_LOCK = threading.Lock()
@@ -52,7 +51,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.call_count = 0
         self.use_vad = use_vad
         self.sa = SentenceAccumulator()
-        self.sa_arabic = SentenceAccumulatorArabic()
         self.stop_event = threading.Event()
         self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
