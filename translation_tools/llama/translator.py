@@ -1,8 +1,8 @@
 import re
 import time
 import json
-
-from typing import Any, Callable, Dict, List
+import logging
+from typing import Any, Callable, Dict, List, Optional
 from functools import wraps
 
 
@@ -104,157 +104,223 @@ LANGUAGE_EXAMPLES = {
     "zh": "家庭是社会的基础。",
 }
 
-IGNORE_PHRASES = [
+# Unused for now. Remove or integrate if needed.
+IGNORE_PHRASES: List[str] = [
     "subscribing to a channel",
     "Nancy Ajram's translation",
 ]
 
-def timer_decorator(func):
+MAX_BUFFER_SIZE = 3  # Maximum number of previous texts to keep
+
+
+def timer_decorator(func: Callable) -> Callable:
+    """
+    Decorator to log the execution time of functions.
+    """
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print(f"[DEBUG]: Execution time for {func.__name__}: {end_time - start_time:.2f} seconds")
+        logging.debug(f"Execution time for {func.__name__}: {end_time - start_time:.2f} seconds")
         return result
-
     return wrapper
 
 
 def clean_json_string(json_string: str) -> str:
-    json_string = re.sub(r"\\'", "'", json_string)
-    return json_string
+    """
+    Cleans a JSON string by replacing escaped single quotes.
+    """
+    return re.sub(r"\\'", "'", json_string)
 
 
-def retry_on_error(max_retries: int = 3, retry_delay: float = 0.5):
-    def decorator(func: Callable):
+def retry_on_error(max_retries: int = 3, retry_delay: float = 0.5) -> Callable:
+    """
+    Decorator to retry a function on error up to max_retries times with a delay.
+    """
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
+            result = None  # Initialize result for logging in exception cases.
             for attempt in range(max_retries):
                 try:
                     result = func(*args, **kwargs)
-                    
+                    # If the result is a string, clean and parse it.
                     if isinstance(result, str):
-                        try:
-                            cleaned_result = clean_json_string(result)
-                            parsed_result = json.loads(cleaned_result)
-                        except json.JSONDecodeError:
-                            raise ValueError("Invalid JSON response")
+                        cleaned_result = clean_json_string(result)
+                        parsed_result = json.loads(cleaned_result)
                     else:
                         parsed_result = result
 
+                    # Validate the structure of the response.
                     if isinstance(parsed_result, dict):
                         if "translate" in parsed_result:
                             return parsed_result
                         elif "error" in parsed_result:
                             raise ValueError(f"API error: {parsed_result['error']}")
-                    
                     raise ValueError("Invalid response structure")
-
                 except Exception as e:
-                    print(f"Attempt {attempt + 1}: An error occurred: {e}")
-                    print(result)
+                    logging.error(f"Attempt {attempt + 1} failed with error: {e}")
+                    if result is not None:
+                        logging.debug(f"Response was: {result}")
                     if attempt == max_retries - 1:
                         raise Exception(f"Failed to get translation after {max_retries} attempts: {str(e)}")
-                time.sleep(retry_delay)
-            
+                    time.sleep(retry_delay)
             raise Exception("Unexpected error in translation process")
         return wrapper
     return decorator
 
 
-class LlamaTranslator:
-    
-    def __init__(
-            self,
-            client=None,
-            buffer_text=None
-        ):
-        self.client = client
-        self.own_buffer = buffer_text is None
-        self.buffer_text = buffer_text if buffer_text else []
+# A constant template for the translation context
+TRANSLATION_CONTEXT_TEMPLATE = (
+    "Expert translator: Translate from {src_lang} to {tgt_langs}.\n"
+    "Important rules:\n"
+    "1. Return strict JSON format as provided in the example response with ISO 2-letter language codes.\n"
+    "2. Keep exact structure as in example.\n"
+    "3. Maintain original meaning without additions.\n"
+    "4. Include all specified target languages.\n"
+    "5. Use previous context only for reference: < {buffer_text} >.\n"
+    "6. Ensure that any fragments of sentences that appear mistakenly from previous phrases are removed to maintain coherence and accuracy in translation.\n"
+    "7. NEVER USE WORD 'diety'.\n\n"
+    "Key phrases as recommendations on how they should be translated:\n"
+    '   "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",\n'
+    '   "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله  --> After this, I, as a servant of Allah and myself, advise you to fear Allah",\n'
+    '   "أزواجكم بنينا وحفدا   --> Your wives and children are your descendants",\n'
+    '   "من استطاع  --> Whoever among you",\n'
+    '   "منكم الباءة --> Those who can afford to marry",\n'
+    '   "أضيق --> If they should be poor",\n'
+    '   "ومودتها --> her affection",\n'
+    '   "وتجنون ثمراتها أولادا بارين يحملون اسمكم --> And you will reap the fruits thereof, children who bear your names",\n'
+    '   "يكونون دخرا لكم في كباركم --> They will be a source of provision for you in your old age",\n'
+    '   "على ما فيه محق --> On what brings benefit",\n\n'
+    "Additional rules:\n"
+    '   "Do not translate the word \'God\' as \'diety\' in English translations.",\n'
+    '   "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",\n'
+    '   "Never use the word \'lord\' in a sentence where Prophet Muhammad is mentioned, instead, use the word \'master\'.",\n'
+    '   "Do not translate sentences containing the word \'subtitles\', \'Subscribe to the channel\', \'Nancy\'s translation\' or \'subtitle\', replace these sentences with a space symbol.",\n'
+    '   "Use \'thereafter\' instead of \'and after that.\'.",\n'
+    '   "Translate \'Allah\' as \'Allah\' to maintain its original meaning.",\n'
+    '   "Avoid adding interpretations that may alter the meaning of the religious text.",\n'
+    '   "Be aware of cultural and linguistic nuances specific to Islamic texts and traditions.",\n'
+    '   "Use precise and accurate translations of Islamic terminology, such as \'Quran\', \'Hadith\', \'Sunna\', and \'Sharia\'.",\n'
+    '   "Avoid using language that may be perceived as disrespectful or insensitive to Islamic values and principles.",\n'
+    '   "Ensure that the structure of the original text is preserved in the translation."\n\n'
+    "Example response (strictly follow this format):\n"
+    "{example_response}\n"
+    "Text to translate: {text}"
+)
 
-    def get_example_response(self, tgt_langs, language_examples=LANGUAGE_EXAMPLES):
+
+class LlamaTranslator:
+    """
+    A translator class that uses a provided client to translate text into multiple languages.
+    """
+
+    def __init__(self, client: Any, model: str, buffer_text: Optional[List[str]] = None) -> None:
+        """
+        Initializes the translator.
+
+        :param client: A client with a chat completions API.
+        :param model: The model identifier to use for translations.
+        :param buffer_text: Optional initial list of context texts.
+        """
+        self.client = client
+        self.model = model
+        self.own_buffer = buffer_text is None
+        self.buffer_text = buffer_text if buffer_text is not None else []
+
+    def get_example_response(self, tgt_langs: List[str],
+                             language_examples: Dict[str, str] = LANGUAGE_EXAMPLES) -> str:
+        """
+        Generates an example JSON response string for the specified target languages.
+
+        :param tgt_langs: List of target language ISO codes.
+        :param language_examples: Dictionary of language examples.
+        :return: An escaped JSON string.
+        """
         translations = {lang: language_examples.get(lang, "") for lang in tgt_langs}
         response_dict = {"translate": translations}
-
-        # First dump: produces non-ASCII-escaped JSON
+        # Dump JSON with non-ASCII characters intact.
         json_str = json.dumps(response_dict, ensure_ascii=False)
-
-        # Manually escape only double-quotes and backslashes:
-        # (This is NOT the same as re-running json.dumps!)
+        # Manually escape backslashes and double-quotes.
         escaped_json_str = json_str.replace('\\', '\\\\').replace('"', '\\"')
-
-        # Return that single line with quotes escaped but real characters still intact
         return escaped_json_str
 
-    def split_into_chunks(self, array, chunk_size=30):
+    @staticmethod
+    def split_into_chunks(array: List[Any], chunk_size: int = 30) -> List[List[Any]]:
+        """
+        Splits a list into chunks of a specified size.
+
+        :param array: The list to be split.
+        :param chunk_size: Size of each chunk.
+        :return: List of list chunks.
+        """
         return [array[i:i + chunk_size] for i in range(0, len(array), chunk_size)]
 
     @timer_decorator
     @retry_on_error(max_retries=2, retry_delay=0.50)
-    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
-        context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
-        Important rules:
-        1. Return strict JSON format as provided in a example response with ISO 2-letter language codes
-        2. Keep exact structure as in example
-        3. Maintain original meaning without additions
-        4. Include all specified target languages
-        5. Use previous context only for reference: < {" ".join(self.buffer_text)} > 
-        6. Ensure that any fragments of sentences that appear mistakenly from previous phrases are removed to maintain coherence and accuracy in translation.
-        8. NEVER USE WORD 'diety'.
+    def translate(
+        self,
+        text: str,
+        src_lang: str = "ar",
+        tgt_langs: Optional[List[str]] = None,
+        example_response: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Translates the given text from src_lang to the specified target languages using the client.
+        Retries on error if the response is not as expected.
 
-        7.Key phrases as recommendations on how they should be translated:
-            "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",
-            "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله  --> After this, I, as a servant of Allah and myself, advise you to fear Allah",
-            "أزواجكم بنينا وحفدا   --> Your wives and children are your descendants",
-            "من استطاع  --> Whoever among you",
-            "منكم الباءة --> Those who can afford to marry",
-            "أضيق --> If they should be poor",
-            "ومودتها --> her affection",
-            "وتجنون ثمراتها أولادا بارين يحملون اسمكم --> And you will reap the fruits thereof, children who bear your names",
-            "يكونون دخرا لكم في كباركم --> They will be a source of provision for you in your old age",
-            "على ما فيه محق --> On what brings benefit",
+        :param text: The text to translate.
+        :param src_lang: The source language code.
+        :param tgt_langs: List of target language codes.
+        :param example_response: A JSON string example of the expected response format.
+        :return: A dictionary containing the translations.
+        """
+        if tgt_langs is None:
+            tgt_langs = ["ar", "en", "fa", "ru", "ur"]
+        if example_response is None:
+            example_response = "{}"  # Fallback if not provided
 
-        Additional rules:
-            "Do not translate the word "God" as "diety" in English translations.",
-            "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
-            "Never use the word 'lord' in a sentence where Prophet Muhammad is mentioned, instead, use the word 'master'.",
-            "Do not translate sentences containing the word 'subtitles', 'Subscribe to the channel', 'Nancy's translation' or 'subtitle', replace these sentences with a space symbol",
-            "Use 'thereafter' instead of 'and after that.'",
-            "Translate 'Allah' as 'Allah' to maintain its original meaning.",
-            "Avoid adding interpretations that may alter the meaning of the religious text.",
-            "Be aware of cultural and linguistic nuances specific to Islamic texts and traditions.",
-            "Use precise and accurate translations of Islamic terminology, such as 'Quran,' 'Hadith,' 'Sunna,' and 'Sharia.'",
-            "Avoid using language that may be perceived as disrespectful or insensitive to Islamic values and principles.",
-            "Ensure that the structure of the original text is preserved in the translation."
+        # Format the context using the constant template.
+        context = TRANSLATION_CONTEXT_TEMPLATE.format(
+            src_lang=src_lang,
+            tgt_langs=", ".join(tgt_langs),
+            buffer_text=" ".join(self.buffer_text),
+            example_response=example_response,
+            text=text
+        )
 
-        Example response (strictly follow this format):
-        {example_response}
-        Text to translate: {text}"""
-        
         completion = self.client.chat.completions.create(
             messages=[
-                {
-                    "role": "system",
-                    "content": context
-                },
-                {
-                    "role": "user",
-                    "content": text
-                }
+                {"role": "system", "content": context},
+                {"role": "user", "content": text}
             ],
             model=self.model,
             response_format={"type": "json_object"},
             temperature=0.2,
             top_p=0.1,
         )
+        # Return the raw content; the retry decorator will parse/validate it.
         return completion.choices[0].message.content
 
-    def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
+    def get_translations(
+        self,
+        text: str,
+        src_lang: str = "ar",
+        tgt_langs: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Translates text into multiple target languages, processing them in chunks if needed.
+        Also manages a buffer of previous texts if self.own_buffer is True.
+
+        :param text: The text to translate.
+        :param src_lang: The source language code.
+        :param tgt_langs: List of target language codes (default provided if None).
+        :return: A dictionary containing translations.
+        """
         if tgt_langs is None:
             tgt_langs = ["ar", "en", "fa", "ru", "ur"]
-        translations = {"translate": {}}
+        translations: Dict[str, Any] = {"translate": {}}
         tgt_lang_chunks = self.split_into_chunks(tgt_langs)
         for tgt_lang_chunk in tgt_lang_chunks:
             example_response = self.get_example_response(tgt_lang_chunk)
@@ -262,6 +328,6 @@ class LlamaTranslator:
             translations["translate"].update(chunk_translations["translate"])
         if self.own_buffer:
             self.buffer_text.append(text)
-            if len(self.buffer_text) > 3:
+            if len(self.buffer_text) > MAX_BUFFER_SIZE:
                 self.buffer_text.pop(0)
         return translations
