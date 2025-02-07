@@ -111,12 +111,14 @@ class TranscriptionServer:
             speaker_lang = parsed_data.get('speakerLang')
             all_langs = parsed_data.get('allLangs')
             audio_base64 = parsed_data.get('audio')
+            is_stream_started = parsed_data.get('isStartStream',True)
+
             if audio_base64:
                 # Decode base64 to bytes
                 audio_bytes = base64.b64decode(audio_base64)
                 # Convert bytes to numpy array
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                return audio_np, speaker_lang, all_langs
+                return audio_np, speaker_lang, all_langs, is_stream_started
             else:
                 return False, None, None
         except json.JSONDecodeError as e:
@@ -135,7 +137,7 @@ class TranscriptionServer:
             if self.speaker_manager.is_server_full(websocket, options):
                 websocket.close()
                 return False  # Indicates that the connection should not continue
-            
+
             self.initialize_client(websocket, options)
             return True
         except json.JSONDecodeError:
@@ -149,17 +151,18 @@ class TranscriptionServer:
             return False
 
     def process_audio_frames(self, websocket):
-        frame_np, speaker_lang, all_langs = self.get_audio_from_websocket(websocket)
+        frame_np, speaker_lang, all_langs, is_stream_started = self.get_audio_from_websocket(websocket)
         if type(frame_np) == bool and frame_np:
             return True
         client = self.speaker_manager.get_client(websocket)
 
         if client is False or frame_np is False or frame_np is None or frame_np.size == 0:
             return False
-        
+
         client.set_speaker_lang(speaker_lang)
         client.set_all_langs(all_langs)
         client.add_frames(frame_np)
+        client.set_is_stream_started(is_stream_started)
         return True
 
     def recv_audio(
