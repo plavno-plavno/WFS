@@ -50,6 +50,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.no_speech_thresh = 0.45
         self.call_count = 0
         self.use_vad = use_vad
+        self.is_stream_started = True
         self.sa = SentenceAccumulator()
         self.stop_event = threading.Event()
         self.previous_translation_accumulated_text = ""
@@ -74,6 +75,9 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             )
         )
+
+    def set_is_stream_started(self,flag):
+        self.is_stream_started = flag
 
     def check_valid_model(self, model_size):
         """
@@ -188,6 +192,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.send_transcription_to_client(segments)
 
     def translate_and_send_thread(self):
+        if self.is_stream_started:
             translations = self.prepare_translations()
             self.send_translations_to_all_listeners(translations)
 
