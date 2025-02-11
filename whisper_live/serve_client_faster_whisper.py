@@ -3,6 +3,7 @@ import threading
 import json
 import time
 import string
+import asyncio
 
 from embeddings.avatar_poster import AvatarPoster
 from embeddings.embeddings import EmbeddingsClient
@@ -119,7 +120,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         if info.language_probability > 0.5:
             self.language = info.language
-            logging.info(f"Detected language {self.language} with probability {info.language_probability}")
+            print(f"Detected language {self.language} with probability {info.language_probability}")
             self.websocket.send(json.dumps(
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}))
 
@@ -211,9 +212,36 @@ class ServeClientFasterWhisper(ServeClientBase):
         response = result if isinstance(result, str) else result.get("response", None)
 
         if response is not None:
-            print(response)
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
-            print(avatar_response)
+            print(f"[INFO]     Sent RAG text answer to [AVATAR]: {response}")
+            self.send_text_answer_to_client(response)
+    
+
+    def get_embeddings_and_rag_thread_stream(self, query: str):
+        self.avatar_poster.send_stop_request()
+
+        embeddings = self.embedder.get_embeddings(
+            query=query,
+            top_k=26,
+            index_name=self.index
+        )
+
+        full_response = ""
+        for chunk in self.ragRetriever.retrieve_context_stream(embeddings, query, self.speaker_lang):
+            # Handle string error response
+            if isinstance(chunk, str):
+                self.send_text_answer_to_client(chunk)
+                return
+
+            response_chunk = chunk.get("response", None)
+            if response_chunk:
+                full_response += response_chunk
+                self.send_text_answer_to_client(response_chunk)
+
+        if full_response:
+            avatar_response = self.avatar_poster.send_text_request(text=full_response, lang=self.speaker_lang)
+            print(f"[INFO]     Sent RAG text answer to [AVATAR]: {full_response}")
+
 
     def speech_to_text(self):
         """
@@ -232,9 +260,10 @@ class ServeClientFasterWhisper(ServeClientBase):
             Exception: If there is an issue with audio processing or WebSocket communication.
 
         """
+        previous_transcription_text = None
         while not self.stop_event.is_set():
             if self.exit:
-                logging.info("Exiting speech to text thread")
+                print("Exiting speech to text thread")
                 break
 
             if self.frames_np is None:
@@ -242,7 +271,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             client = self.server.speaker_manager.get_client(self.websocket)
             if not client:
-                print("CLIENT DEAD")
+                print("[WARNING]     CLIENT DEAD")
                 return
 
             self.clip_audio_if_no_valid_segment()
@@ -255,10 +284,12 @@ class ServeClientFasterWhisper(ServeClientBase):
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
                 if result is None and self.translation_accumulated_text != "":
-                    print(f"[INFO]: No output from Whisper, using previous output: {self.translation_accumulated_text}")
-                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
+                    print(f"[INFO]     No output from Whisper, using previous output: {self.translation_accumulated_text}")
+                    if previous_transcription_text != self.translation_accumulated_text:
+                        translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread_stream,
                                                           args=(self.translation_accumulated_text,), daemon=True)
-                    translation_thread.start()
+                        translation_thread.start()
+                    previous_transcription_text = self.translation_accumulated_text
                     self.translation_accumulated_text=""
 
                 if result is None or self.language is None:
@@ -362,10 +393,12 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             if rtl_language:
                 # Check duplicates in RTL scenario
-                if not self._is_duplicate_rtl():
-                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
-                    translation_thread.start()
-                else:
+                # if not self._is_duplicate_rtl():
+                #     print(f"[INFO]     397")
+                #     translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
+                #     translation_thread.start()
+                # else:
+                if self._is_duplicate_rtl():
                     print(" **** CAUGHT DUPLICATE (RTL) **** ")
                     self.previous_translation_accumulated_text = ""
                     self.translation_accumulated_text = ""
@@ -385,8 +418,8 @@ class ServeClientFasterWhisper(ServeClientBase):
                 if processed:
                     self.translation_accumulated_text = processed
                     # temp uncommented because comment 388, 389 lines breaks avatar
-                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
-                    translation_thread.start()
+                    # translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
+                    # translation_thread.start()
 
         # Update state for next call
         self.previous_segment_ready = (translate and rtl_language)

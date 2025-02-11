@@ -174,6 +174,9 @@ class Client:
         if "segments" in message.keys():
             self.process_segments(message["segments"])
 
+        if "text" in message.keys():
+            print(f"[INFO] RAG answer from server: {message['text']}")
+
     def on_error(self, ws, error):
         print(f"[ERROR] WebSocket Error: {error}")
         print(f"[DEBUG] Trying to connect to: {ws.url}")

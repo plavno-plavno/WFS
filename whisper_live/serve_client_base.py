@@ -172,10 +172,10 @@ class ServeClientBase(object):
             "segments": segments,
         }        
                 
-
         try:            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
+            print(f"[INFO]     Sent transcription to [CLIENT]: {message}")
 
         except Exception as e:
             logging.error('[ERROR SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN]',)
@@ -185,8 +185,38 @@ class ServeClientBase(object):
                 client.stop_and_destroy_thread()
                 client.cleanup()
             else:
-               print('Client is not an object')
+               logging.warning('Client is not an object')
 
+
+    def send_text_answer_to_client(self, text:str):
+        """
+        Sends the specified text answer to the client over the websocket connection.
+
+        Formats the text answer into a JSON object and attempts to send
+        this object to the client and to all listeners. If an error occurs, it logs the error.
+
+        Args:
+            text (str): RAG answer to be sent to the client.
+        """
+        message = {
+            "uid": self.client_uid,
+            "text": text,
+        }        
+            
+        try:            
+            # Send to the primary client
+            self.websocket.send(json.dumps(message))
+            print(f"[INFO]     Sent RAG text answer to [CLIENT]: {message}")
+
+        except Exception as e:
+            logging.error('[ERROR SEND RAG ANSWER TO CLIENT CONNECTION BROKEN]',)
+            client = self.server.speaker_manager.get_client(self.websocket)
+            if client and not isinstance(client, bool):
+                print('Trying to CLEAN UP')
+                client.stop_and_destroy_thread()
+                client.cleanup()
+            else:
+               logging.warning('Client is not an object')
 
 
             
@@ -213,5 +243,5 @@ class ServeClientBase(object):
         associated with the transcription process.
 
         """
-        logging.info("Cleaning up.")
+        print("Cleaning up.")
         self.exit = True
