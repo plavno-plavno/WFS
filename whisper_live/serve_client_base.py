@@ -1,6 +1,7 @@
 import json
 import logging
 import threading
+import time
 
 import numpy as np
 
@@ -30,8 +31,9 @@ class ServeClientBase(object):
         self.all_langs = None
         self.speaker_lang = None
         self.server = server
-        self.index = '_9079dbe1_3b33_49d8_831b_bd75c70bfeca'
-
+        self.index = '_7e8d8272_5653_4794_82ad_50047f164f51' 
+        self.sending_answer_running = False  # flag for stopping stream answer sending if new question starts
+        
         # text formatting
         self.pick_previous_segments = 2
 
@@ -175,10 +177,10 @@ class ServeClientBase(object):
         try:            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
-            print(f"[INFO]     Sent transcription to [CLIENT]: {message}")
+            print(f"[INFO {self.client_uid}]     Sent transcription to [CLIENT]: {message}")
 
         except Exception as e:
-            logging.error('[ERROR SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN]',)
+            logging.error(f"[ERROR {self.client_uid}]     SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN",)
             client = self.server.speaker_manager.get_client(self.websocket)
             if client and not isinstance(client, bool):
                 print('Trying to CLEAN UP')
@@ -188,7 +190,7 @@ class ServeClientBase(object):
                logging.warning('Client is not an object')
 
 
-    def send_text_answer_to_client(self, text:str):
+    def send_text_answer_stream_to_client(self, text:str):
         """
         Sends the specified text answer to the client over the websocket connection.
 
@@ -198,25 +200,32 @@ class ServeClientBase(object):
         Args:
             text (str): RAG answer to be sent to the client.
         """
-        message = {
-            "uid": self.client_uid,
-            "text": text,
-        }        
-            
-        try:            
-            # Send to the primary client
-            self.websocket.send(json.dumps(message))
-            print(f"[INFO]     Sent RAG text answer to [CLIENT]: {message}")
+        char_pairs = [text[i:i+2] for i in range(0, len(text), 2)]
+        
+        for pair in char_pairs:
+            message = {
+                "uid": self.client_uid,
+                "text": pair,
+            }        
 
-        except Exception as e:
-            logging.error('[ERROR SEND RAG ANSWER TO CLIENT CONNECTION BROKEN]',)
-            client = self.server.speaker_manager.get_client(self.websocket)
-            if client and not isinstance(client, bool):
-                print('Trying to CLEAN UP')
-                client.stop_and_destroy_thread()
-                client.cleanup()
-            else:
-               logging.warning('Client is not an object')
+            if not self.sending_answer_running:
+                break
+            try:            
+                # Send to the primary client
+                self.websocket.send(json.dumps(message))
+                print(f"[INFO {self.client_uid}]     Sent RAG text answer to [CLIENT]: {message}")
+                time.sleep(0.12)
+
+            except Exception as e:
+                logging.error(f"[ERROR {self.client_uid}]     SEND RAG ANSWER TO CLIENT CONNECTION BROKEN",)
+                client = self.server.speaker_manager.get_client(self.websocket)
+                if client and not isinstance(client, bool):
+                    print('Trying to CLEAN UP')
+                    client.stop_and_destroy_thread()
+                    client.cleanup()
+                else:
+                    logging.warning('Client is not an object')
+                break   
 
 
             

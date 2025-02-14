@@ -56,7 +56,7 @@ class RAGRetriever:
         context = f"""You are a book expert and librarian. Please respond to the user's question below using the provided context.
 
     **Important Rules (STRICT COMPLIANCE REQUIRED):**
-    1. If the context does not contain the close information use your knowledge about book asked, otherwise simply respond with "I don't know"
+    1. If the context does not contain the close information use your knowledge about book asked, otherwise respond with "I don't know the answer to this question."
     2. Keep your answer concise, not less then 100 words, but not exceeding 200 words.
     3. **Respond with JSON format only {{"response":"*response string here*"}}**
     4. **All responses must be translated into {lang}. No exceptions.**
@@ -93,6 +93,9 @@ class RAGRetriever:
             logging.error("Failed to decode JSON response.")
             return "I'm sorry, but I couldn't process your request at this time."
         except Exception as e:
+            if "context_length_exceeded" in str(e):
+                print(f"[WARNING]    context_length_exceeded ---> Retrying... \n\n{e}")
+                return "context_length_exceeded"
             logging.error(f"Chat completion failed: {e}")
             return "I'm sorry, but I couldn't process your request at this time."
 
@@ -168,7 +171,6 @@ class RAGRetriever:
                             continue
 
                     yield {"response": content}
-                    print(f"Yielded chunk: {content}")
         except json.JSONDecodeError:
             logging.error("Failed to decode JSON response.")
             yield "I'm sorry, but I couldn't process your request at this time."

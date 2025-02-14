@@ -69,6 +69,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.translation_accumulated_text = ''
         self.translation_start_time = "0.0"
         self.translation_end_time = "0.0"
+        self.previous_segments = [{'text': ''}]
+        self.current_text = ''
         self.avatar_poster = AvatarPoster(client_id=client_uid)
 
         # threading
@@ -194,53 +196,43 @@ class ServeClientFasterWhisper(ServeClientBase):
             # show previous output if there is pause i.e. no output from whisper
             segments = self.get_previous_output()
 
-        if len(segments):
+        if len(segments) and segments[-1]['text'] != self.previous_segments[-1]['text']:
             self.send_transcription_to_client(segments)
+            self.previous_segments = segments
+
 
     def get_embeddings_and_rag_thread(self, query: str):
         self.avatar_poster.send_stop_request()
+        top_k = 26
 
         embeddings = self.embedder.get_embeddings(
             query=query,
-            top_k=26,
+            top_k=top_k,
             index_name=self.index
         )
 
         result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
 
+        while result == "context_length_exceeded":
+            top_k -= 2
+            embeddings = self.embedder.get_embeddings(
+                query=query,
+                top_k=top_k,
+                index_name=self.index
+            )
+            result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
+            
         # cerebras returns str 'I cant process this reques at  this time' when recieve an error
         response = result if isinstance(result, str) else result.get("response", None)
 
-        if response is not None:
+        if response is not None and self.current_text == query:
+            print(f"[CHECK CURR ANSWER {self.client_uid}]     {self.current_text}, {query}")
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
-            print(f"[INFO]     Sent RAG text answer to [AVATAR]: {response}")
-            self.send_text_answer_to_client(response)
-    
+            print(f"[INFO {self.client_uid}]     Sent RAG text answer to [AVATAR]: {response}")
 
-    def get_embeddings_and_rag_thread_stream(self, query: str):
-        self.avatar_poster.send_stop_request()
-
-        embeddings = self.embedder.get_embeddings(
-            query=query,
-            top_k=26,
-            index_name=self.index
-        )
-
-        full_response = ""
-        for chunk in self.ragRetriever.retrieve_context_stream(embeddings, query, self.speaker_lang):
-            # Handle string error response
-            if isinstance(chunk, str):
-                self.send_text_answer_to_client(chunk)
-                return
-
-            response_chunk = chunk.get("response", None)
-            if response_chunk:
-                full_response += response_chunk
-                self.send_text_answer_to_client(response_chunk)
-
-        if full_response:
-            avatar_response = self.avatar_poster.send_text_request(text=full_response, lang=self.speaker_lang)
-            print(f"[INFO]     Sent RAG text answer to [AVATAR]: {full_response}")
+            time.sleep(2)
+            self.sending_answer_running = True
+            self.send_text_answer_stream_to_client(response)
 
 
     def speech_to_text(self):
@@ -260,7 +252,7 @@ class ServeClientFasterWhisper(ServeClientBase):
             Exception: If there is an issue with audio processing or WebSocket communication.
 
         """
-        previous_transcription_text = None
+        translation_thread = None
         while not self.stop_event.is_set():
             if self.exit:
                 print("Exiting speech to text thread")
@@ -271,7 +263,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             client = self.server.speaker_manager.get_client(self.websocket)
             if not client:
-                print("[WARNING]     CLIENT DEAD")
+                print(f"[WARNING {self.client_uid}]     CLIENT DEAD")
                 return
 
             self.clip_audio_if_no_valid_segment()
@@ -284,12 +276,14 @@ class ServeClientFasterWhisper(ServeClientBase):
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
                 if result is None and self.translation_accumulated_text != "":
-                    print(f"[INFO]     No output from Whisper, using previous output: {self.translation_accumulated_text}")
-                    if previous_transcription_text != self.translation_accumulated_text:
-                        translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread_stream,
+                    self.current_text = self.translation_accumulated_text
+                    print(f"[INFO {self.client_uid}]     No output from Whisper, using previous output: {self.translation_accumulated_text}")
+                    if translation_thread and translation_thread.is_alive():
+                        self.sending_answer_running = False
+                    
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
                                                           args=(self.translation_accumulated_text,), daemon=True)
-                        translation_thread.start()
-                    previous_transcription_text = self.translation_accumulated_text
+                    translation_thread.start()
                     self.translation_accumulated_text=""
 
                 if result is None or self.language is None:
@@ -299,7 +293,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 self.handle_transcription_output(result, duration)
 
             except Exception as e:
-                logging.error(f"[ERROR]: Failed to transcribe audio chunk: {e}")
+                logging.error(f"[ERROR {self.client_uid}]     Failed to transcribe audio chunk: {e}")
                 time.sleep(0.01)
 
     def remove_until_dot(self, text):
