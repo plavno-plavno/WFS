@@ -262,6 +262,6 @@ class LlamaTranslator:
             translations["translate"].update(chunk_translations["translate"])
         if self.own_buffer:
             self.buffer_text.append(text)
-            if len(self.buffer_text) > MAX_BUFFER_SIZE
+            if len(self.buffer_text) > MAX_BUFFER_SIZE:
                 self.buffer_text.pop(0)
         return translations
