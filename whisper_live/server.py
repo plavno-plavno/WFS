@@ -128,24 +128,23 @@ class TranscriptionServer:
 
     def handle_new_connection(self, websocket):
         try:
-            logging.info("New client connected")
+            print("[INFO]    New client connected")
             options = websocket.recv()
             options = json.loads(options)
             self.use_vad = options.get('use_vad')
             if self.speaker_manager.is_server_full(websocket, options):
                 websocket.close()
                 return False  # Indicates that the connection should not continue
-            
             self.initialize_client(websocket, options)
             return True
         except json.JSONDecodeError:
-            logging.error("Failed to decode JSON from client")
+            print("[ERROR]    Failed to decode JSON from client")
             return False
         except ConnectionClosed:
-            logging.error("Connection closed by client")
+            print("[ERROR]    Connection closed by client")
             return False
         except Exception as e:
-            logging.error(f"Error during new connection initialization: {str(e)}")
+            print(f"[ERROR]    Error during new connection initialization: {str(e)}")
             return False
 
     def process_audio_frames(self, websocket):
@@ -196,9 +195,9 @@ class TranscriptionServer:
                 if not self.process_audio_frames(websocket):
                     break
         except ConnectionClosed:
-            logging.info("Connection closed by client")
+            print("[INFO]    Connection closed by client")
         except Exception as e:
-            logging.error(f"Unexpected error: {str(e)}")
+            print(f"[ERROR]   Unexpected error: {str(e)}")
         finally:
             if self.speaker_manager.get_client(websocket):
                 self.cleanup(websocket)
@@ -279,9 +278,9 @@ class TranscriptionServer:
 
         # Log the server availability
         if ssl_context:
-            logging.info(f"Server will be available at: wss://{host}:{port}")
+            print(f"Server will be available at: wss://{host}:{port}")
         else:
-            logging.info(f"SSL not configured. Server will be available at: ws://{host}:{port}")
+            print(f"SSL not configured. Server will be available at: ws://{host}:{port}")
 
         # Start the server with SSL support if ssl_context is not None
         with serve(

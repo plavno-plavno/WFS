@@ -77,6 +77,11 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
         self.trans_thread.start()
 
+        self.previous_chunk_time = time.time()
+
+        self.check_silence_thread = threading.Thread(target=self.check_silence_from_client, daemon=True)
+        self.check_silence_thread.start()
+
         self.websocket.send(
             json.dumps(
                 {
@@ -86,6 +91,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             )
         )
+
 
     def check_valid_model(self, model_size):
         """
@@ -150,6 +156,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         if self.language is None and info is not None:
             self.set_language(info)
         return result
+    
+
 
     def get_previous_output(self):
         """
@@ -177,6 +185,19 @@ class ServeClientFasterWhisper(ServeClientBase):
             if time.time() - self.t_start > self.add_pause_thresh:
                 self.text.append('')
         return segments
+    
+
+    def check_silence_from_client(self):
+        """
+        Checks if there is no speech from the client for 10 seconds and sends a ping to the client.
+        """
+        while not self.stop_event.is_set():
+            if self.previous_chunk_time and time.time() - self.previous_chunk_time > 10:
+                if not self.send_ping():
+                    self.stop_event.set()
+                print(f"[INFO {self.client_uid}]     No speech from client for 10 seconds, sending ping")
+                self.previous_chunk_time = time.time()
+            time.sleep(5)
 
     def handle_transcription_output(self, result, duration):
         """
@@ -226,7 +247,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         response = result if isinstance(result, str) else result.get("response", None)
 
         if response is not None and self.current_text == query:
-            print(f"[CHECK CURR ANSWER {self.client_uid}]     {self.current_text}, {query}")
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
             print(f"[INFO {self.client_uid}]     Sent RAG text answer to [AVATAR]: {response}")
 
@@ -277,6 +297,7 @@ class ServeClientFasterWhisper(ServeClientBase):
                 result = self.transcribe_audio(input_sample)
                 if result is None and self.translation_accumulated_text != "":
                     self.current_text = self.translation_accumulated_text
+                    self.previous_chunk_time = time.time()
                     print(f"[INFO {self.client_uid}]     No output from Whisper, using previous output: {self.translation_accumulated_text}")
                     if translation_thread and translation_thread.is_alive():
                         self.sending_answer_running = False

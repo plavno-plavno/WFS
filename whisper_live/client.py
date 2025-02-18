@@ -46,6 +46,7 @@ class Client:
             translate (bool, optional): Specifies if the task is translation. Default is False.
             ignore_ssl_cert (bool, optional): Specifies if SSL certificate should be ignored.
         """
+        self.accumulated_rag_text = []
         self.recording = False
         self.task = "translate" if translate else "transcribe"
         self.uid = uid
@@ -172,10 +173,15 @@ class Client:
             return
 
         if "segments" in message.keys():
-            self.process_segments(message["segments"])
+            self.accumulated_rag_text = []
+            self.process_segments(message["segments"])            
 
         if "text" in message.keys():
-            print(f"[INFO] RAG answer from server: {message['text']}")
+            new_text = message["text"]
+            self.accumulated_rag_text.append(new_text)
+            if self.log_transcription:
+                utils.clear_screen()
+                utils.print_transcript(self.accumulated_rag_text)
 
     def on_error(self, ws, error):
         print(f"[ERROR] WebSocket Error: {error}")
@@ -184,7 +190,7 @@ class Client:
         self.error_message = error
 
     def on_close(self, ws, close_status_code, close_msg):
-        print(f"[INFO]: Websocket connection closed: {close_status_code}: {close_msg}")
+        print(f"[INFO]: Websocket connection closed: {close_status_code}: {close_msg}  ------> uid: {self.uid}")
         self.recording = False
         self.waiting = False
 
@@ -199,7 +205,7 @@ class Client:
             ws (websocket.WebSocketApp): The WebSocket client instance.
 
         """
-        print("[INFO]: Opened connection")
+        print("[INFO]: Opened connection", self.uid)
         ws.send(
             json.dumps(
                 {

@@ -31,8 +31,9 @@ class ServeClientBase(object):
         self.all_langs = None
         self.speaker_lang = None
         self.server = server
-        self.index = '_7e8d8272_5653_4794_82ad_50047f164f51' 
+        self.index = '_52d7dc9d_ecaa_4489_87c8_845f58accf4e' 
         self.sending_answer_running = False  # flag for stopping stream answer sending if new question starts
+        self.previous_chunk_time = None  # time of the previous chunk to ping client if no speech for 10 seconds
         
         # text formatting
         self.pick_previous_segments = 2
@@ -158,6 +159,19 @@ class ServeClientBase(object):
             float: The duration of the audio chunk in seconds.
         """
         return input_bytes.shape[0] / self.RATE
+    
+    def send_ping(self):
+        """
+        Sends a ping message to the client to check if the connection is still active.
+
+        This method sends a ping message to the client to check if the connection is still active.
+        """
+        try:
+            self.websocket.send(json.dumps({"uid": self.client_uid, "type": "ping"}))
+            return True
+        except Exception as e:
+            logging.error(f"[ERROR {self.client_uid}]     SEND PING TO CLIENT CONNECTION BROKEN",)
+            return False
 
     def send_transcription_to_client(self, segments):
         """
@@ -171,6 +185,7 @@ class ServeClientBase(object):
         """
         message = {
             "uid": self.client_uid,
+            "type": "question",
             "segments": segments,
         }        
                 
@@ -205,6 +220,7 @@ class ServeClientBase(object):
         for pair in char_pairs:
             message = {
                 "uid": self.client_uid,
+                "type": "answer",
                 "text": pair,
             }        
 
