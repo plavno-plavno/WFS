@@ -275,7 +275,6 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         print("=========================+================================")
         print(f"SPEAKER LANG: {self.speaker_lang}")
-        print(message)
         if isinstance(message, tuple):
             try:
                 # Assuming message is a tuple of key-value pairs
