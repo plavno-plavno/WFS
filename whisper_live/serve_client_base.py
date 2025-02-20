@@ -34,6 +34,7 @@ class ServeClientBase(object):
         self.index = '_52d7dc9d_ecaa_4489_87c8_845f58accf4e' 
         self.sending_answer_running = False  # flag for stopping stream answer sending if new question starts
         self.previous_chunk_time = None  # time of the previous chunk to ping client if no speech for 10 seconds
+        self.micro_stopped = threading.Event()
         
         # text formatting
         self.pick_previous_segments = 2
@@ -49,6 +50,9 @@ class ServeClientBase(object):
 
     def handle_transcription_output(self):
         raise NotImplementedError
+    
+    def set_stop_micro_flag(self):
+        self.micro_stopped.set()
 
     def set_speaker_lang(self, speaker_lang):
         if speaker_lang:
@@ -166,6 +170,8 @@ class ServeClientBase(object):
 
         This method sends a ping message to the client to check if the connection is still active.
         """
+        if self.exit:  # Check if the client is marked for exit
+            return False
         try:
             self.websocket.send(json.dumps({"uid": self.client_uid, "type": "ping"}))
             return True

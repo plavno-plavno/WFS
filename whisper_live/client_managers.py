@@ -49,6 +49,12 @@ class ClientManager:
                     logging.error(f"Failed to disconnect client with uid '{client.client_uid}': {e}")
             self.remove_client(websocket)
         logging.info("All clients have been disconnected.")
+    
+    def get_client_by_uid(self, client_uid: str):
+        for key, val in self.clients.items():
+            if val.client_uid and val.client_uid == client_uid:
+                return key
+        return None
 
     def get_client(self, websocket):
         """

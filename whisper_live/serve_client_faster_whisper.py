@@ -273,6 +273,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         """
         translation_thread = None
+        last_zero_duration_time = None
         while not self.stop_event.is_set():
             if self.exit:
                 print("Exiting speech to text thread")
@@ -280,18 +281,38 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             if self.frames_np is None:
                 continue
-
+            
             client = self.server.speaker_manager.get_client(self.websocket)
             if not client:
                 print(f"[WARNING {self.client_uid}]     CLIENT DEAD")
-                return
+                break
+            
+            if self.micro_stopped.is_set():
+                self.micro_stopped.clear()
+                if self.translation_accumulated_text != "":
+                    self.current_text = self.translation_accumulated_text
+                    self.previous_chunk_time = time.time()
+                    print(f"[INFO {self.client_uid}]     No output from MICROPHONE, using previous output: {self.translation_accumulated_text}")
+                    if translation_thread and translation_thread.is_alive():
+                        self.sending_answer_running = False
+                    
+                    translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
+                                                          args=(self.translation_accumulated_text,), daemon=True)
+                    translation_thread.start()
+                    self.translation_accumulated_text=""
+                    continue
 
             self.clip_audio_if_no_valid_segment()
 
             input_bytes, duration = self.get_audio_chunk_for_processing()
             if duration < 1.0:
-                time.sleep(0.1)  # wait for audio chunks to arrive
+                if last_zero_duration_time is not None and time.time() - last_zero_duration_time  >= 1.0:
+                    self.set_stop_micro_flag()
+                if duration == 0.0 and last_zero_duration_time is None:
+                    last_zero_duration_time = time.time()
+                time.sleep(0.1)
                 continue
+            last_zero_duration_time = None
             try:
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)

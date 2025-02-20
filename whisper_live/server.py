@@ -68,7 +68,17 @@ class TranscriptionServer:
             
             logging.info("Initialized listener.")
             return  # Exit function to avoid client initialization for listeners
-
+        
+        client_uid = options.get('uid', 'client-id-not-received')
+        if client_uid != 'client-id-not-received':
+            existing_client_ws = self.speaker_manager.get_client_by_uid(client_uid=client_uid)
+            if existing_client_ws is not None:
+                print(f'[WARNING {client_uid}]    Client already exists. Removing him...')
+                self.speaker_manager.remove_client(existing_client_ws)
+                self.cleanup(existing_client_ws)
+                existing_client_ws.close()
+                del existing_client_ws
+                print(f'[WARNING  {client_uid}]    existing_client_ws closed.')
 
         # Initialize client if 'is_listener' is not set
         client: Optional[ServeClientBase] = None
@@ -77,7 +87,7 @@ class TranscriptionServer:
                 websocket,
                 language=options.get('language', 'en'),
                 task=options.get('task', "transcribe"),
-                client_uid=options.get('uid', 'client-id-not-received'),
+                client_uid=client_uid,
                 model=options.get('model', "large-v3"),
                 initial_prompt=options.get("initial_prompt"),
                 vad_parameters=options.get("vad_parameters"),
@@ -86,6 +96,7 @@ class TranscriptionServer:
                 transcriber=self.transcriber,
                 server=self
             )
+        print(f'[INFO {client_uid}]    New client created.')
         logging.info("Running faster_whisper backend.")
 
         if client is None:
@@ -111,6 +122,7 @@ class TranscriptionServer:
             speaker_lang = parsed_data.get('speakerLang')
             index = parsed_data.get('index')
             audio_base64 = parsed_data.get('audio')
+            print(audio_base64[:10])
             if audio_base64:
                 # Decode base64 to bytes
                 audio_bytes = base64.b64decode(audio_base64)
@@ -128,9 +140,10 @@ class TranscriptionServer:
 
     def handle_new_connection(self, websocket):
         try:
-            print("[INFO]    New client connected")
             options = websocket.recv()
             options = json.loads(options)
+            client_uid = options.get('uid', 'client-id-not-received')
+            print(f"[INFO {client_uid}]    New client connected")
             self.use_vad = options.get('use_vad')
             if self.speaker_manager.is_server_full(websocket, options):
                 websocket.close()
@@ -141,7 +154,7 @@ class TranscriptionServer:
             print("[ERROR]    Failed to decode JSON from client")
             return False
         except ConnectionClosed:
-            print("[ERROR]    Connection closed by client")
+            print(f"[ERROR {client_uid}]    Connection closed by client")
             return False
         except Exception as e:
             print(f"[ERROR]    Error during new connection initialization: {str(e)}")
@@ -194,6 +207,7 @@ class TranscriptionServer:
             while not self.speaker_manager.is_client_timeout(websocket):
                 if not self.process_audio_frames(websocket):
                     break
+
         except ConnectionClosed:
             print("[INFO]    Connection closed by client")
         except Exception as e:
