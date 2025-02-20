@@ -197,7 +197,6 @@ class LlamaTranslator:
     def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
         context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
         Important rules:
-        0. Never use "diety" word
         1. Return strict JSON format as provided in a example response with ISO 2-letter language codes
         2. Keep exact structure as in example
         3. Maintain original meaning without additions
@@ -215,6 +214,7 @@ class LlamaTranslator:
             "وتجنون ثمراتها أولادا بارين يحملون اسمكم --> And you will reap the fruits thereof, children who bear your names",
             "يكونون دخرا لكم في كباركم --> They will be a source of provision for you in your old age",
             "على ما فيه محق --> On what brings benefit",
+        8. NEVER USE "diety" word in a translations,
 
         Additional rules:
             "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
