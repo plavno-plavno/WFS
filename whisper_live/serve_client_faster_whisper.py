@@ -192,8 +192,8 @@ class ServeClientFasterWhisper(ServeClientBase):
             self.send_transcription_to_client(segments)
 
     def translate_and_send_thread(self):
+        translations = self.prepare_translations()
         if self.is_stream_started:
-            translations = self.prepare_translations()
             self.send_translations_to_all_listeners(translations)
 
     def speech_to_text(self):

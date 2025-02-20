@@ -30,5 +30,3 @@ fi
 
 # Run the Python server script with appropriate SSL options
 eval "$CMD run_server.py --port 9090 --backend faster_whisper -fw 'faster-whisper-large-v3' $SSL_OPTIONS"
-
-
