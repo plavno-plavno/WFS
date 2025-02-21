@@ -6,7 +6,7 @@ import base64
 import logging
 import torch
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from whisper_live.transcriber import WhisperModel
 
@@ -14,6 +14,12 @@ import numpy as np
 
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
+
+from df.enhance import enhance, init_df, load_audio
+from torch import Tensor
+from torchaudio import AudioMetaData
+
+from df.logger import warn_once
 
 from whisper_live.client_managers import SpeakerManager, ListenerManager
 from whisper_live.serve_client_base import ServeClientBase
@@ -53,10 +59,16 @@ class TranscriptionServer:
             self.translator = MultiLingualTranslatorLive()
         else:
             self.translator = LoadBalancedTranslator()
-       
+        
+        # Load default DeepFilterNet model
+        try:
+            self.df_model, self.df_state, _ = init_df()
+        except Exception as e:
+            print('[ERROR]    Cannot download DeepFilterNet model.')
+            self.df_model, self.df_state = None, None
+
 
     def initialize_client(self, websocket, options):
-
         if options.get("listener_uid"):
             # Initialize listener if 'is_listener' is set in options
             listener = ServeListener(
@@ -69,10 +81,8 @@ class TranscriptionServer:
             logging.info("Initialized listener.")
             return  # Exit function to avoid client initialization for listeners
 
-
         # Initialize client if 'is_listener' is not set
         client: Optional[ServeClientBase] = None
-
         client = ServeClientFasterWhisper(
                 websocket,
                 language=options.get('language', None),
@@ -87,10 +97,8 @@ class TranscriptionServer:
                 server=self
             )
         logging.info("Running faster_whisper backend.")
-
         if client is None:
             raise ValueError(f"Backend type {self.backend.value} not recognized or not handled.")
-
         self.speaker_manager.add_client(websocket, client)
 
     def get_audio_from_websocket(self, websocket):
@@ -116,8 +124,10 @@ class TranscriptionServer:
             if audio_base64:
                 # Decode base64 to bytes
                 audio_bytes = base64.b64decode(audio_base64)
-                # Convert bytes to numpy array
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
+
+                audio, _ = load_audio(audio_bytes, self.df_state.sr())
+                enhanced = enhance(self.df_model, self.df_state, audio)
+                audio_np = np.frombuffer(enhanced.numpy().tobytes(), dtype=np.float32)
                 return audio_np, speaker_lang, all_langs, is_stream_started
             else:
                 return False, None, None
