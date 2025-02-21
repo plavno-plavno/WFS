@@ -13,6 +13,41 @@ from whisper_live.serve_client_base import ServeClientBase
 from whisper_live.sentence_accumulator import SentenceAccumulator
 from whisper_live.sentence_accumulator_arabic import SentenceAccumulatorArabic
 
+
+idk_rag_answers_in_dif_langs = [
+    "لا أعرف إجابة هذا السؤال.",  # Arabic
+    "আমি এই প্রশ্নের উত্তর জানি না।",  # Bengali
+    "ငါဒီမေးခွန်းရဲ့အဖြေကိုမသိဘူး။",  # Burmese
+    "我不知道这个问题的答案。",  # Chinese (zh)
+    "من به این سوال پاسخ نمی‌دانم.",  # Dari
+    "Ik weet het antwoord op deze vraag niet.",  # Dutch
+    "I don't know the answer to this question.",  # English
+    "En tiedä vastausta tähän kysymykseen.",  # Finnish
+    "Ich weiß die Antwort auf diese Frage nicht.",  # German
+    "मुझे इस प्रश्न का उत्तर नहीं पता।",  # Hindi
+    "Saya tidak tahu jawaban untuk pertanyaan ini.",  # Indonesian
+    "ನಾನು ಈ ಪ್ರಶ್ನೆಗೆ ಉತ್ತರ ತಿಳಿದಿಲ್ಲ.",  # Kannada
+    "Мен бұл сұраққа жауап білмеймін.",  # Kazakh
+    "Saya tidak tahu jawapan kepada soalan ini.",  # Malay
+    "Kaore au e mohio ki te whakautu ki tenei patai.",  # Maori
+    "Jeg vet ikke svaret på dette spørsmålet.",  # Norwegian
+    "زه د دې پوښتنې ځواب نه پوهیږم.",  # Pashto
+    "من جواب این سوال را نمی‌دانم.",  # Persian
+    "Я не знаю ответа на этот вопрос.",  # Russian
+    "No sé la respuesta a esta pregunta.",  # Spanish
+    "Sijui jibu la swali hili.",  # Swahili
+    "Jag vet inte svaret på denna fråga.",  # Swedish
+    "Hindi ko alam ang sagot sa tanong na ito.",  # Tagalog
+    "நான் இந்த கேள்விக்கு பதில் தெரியாது.",  # Tamil
+    "నేను ఈ ప్రశ్నకు సమాధానం తెలియదు.",  # Telugu
+    "ང་འདི་ནི་དེ་འདྲ་བརྗེ་བའི་འབྲེལ་བ་མ་བྱུང་བའི་ཡིག་ཆ་ཡིན།",  # Tibetan
+    "میں اس سوال کا جواب نہیں جانتا۔",  # Urdu
+    "Men bu savolga javob bilmayman.",  # Uzbek
+    "Mo ko mọ idahun si ibeere yi.",  # Yoruba
+    "Angazi impendulo yalo mbuzo.",  # Zulu
+]
+
+
 class ServeClientFasterWhisper(ServeClientBase):
     SINGLE_MODEL_LOCK = threading.Lock()
 
@@ -243,8 +278,16 @@ class ServeClientFasterWhisper(ServeClientBase):
             )
             result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
             
-        # cerebras returns str 'I cant process this reques at  this time' when recieve an error
         response = result if isinstance(result, str) else result.get("response", None)
+
+        if response in idk_rag_answers_in_dif_langs or response == "I cant process this reques at  this time":
+            embeddings = self.embedder.get_embeddings(
+                query=query,
+                top_k=top_k,
+                index_name=self.index
+            )
+            result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
+            response = result if isinstance(result, str) else result.get("response", None)
 
         if response is not None and self.current_text == query:
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
