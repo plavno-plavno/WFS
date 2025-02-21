@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest  # Changed from self-hosted to GitHub-hosted runner
     steps:
       # Step 1: Check out the repository code
       - name: Checkout code
