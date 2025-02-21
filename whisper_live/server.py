@@ -15,7 +15,7 @@ import numpy as np
 from websockets.sync.server import serve
 from websockets.exceptions import ConnectionClosed
 
-from df.enhance import enhance, init_df, load_audio
+from df.enhance import enhance, init_df, load_audio, resample
 from torch import Tensor
 from torchaudio import AudioMetaData
 
@@ -127,7 +127,9 @@ class TranscriptionServer:
 
                 audio, _ = load_audio(audio_bytes, self.df_state.sr())
                 enhanced = enhance(self.df_model, self.df_state, audio)
+                enhanced = resample(enhanced, self.df_state.sr(), 16000)     # Resample to 16kHz
                 audio_np = np.frombuffer(enhanced.numpy().tobytes(), dtype=np.float32)
+                
                 return audio_np, speaker_lang, all_langs, is_stream_started
             else:
                 return False, None, None
