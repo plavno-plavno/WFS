@@ -132,13 +132,13 @@ class TranscriptionServer:
                 
                 return audio_np, speaker_lang, all_langs, is_stream_started
             else:
-                return False, None, None
+                return False, None, None, None
         except json.JSONDecodeError as e:
             logging.error(f"JSON Decoding Error: Unable to parse JSON data. Details: {str(e)}")
-            return False, None, None
+            return False, None, None, None
         except Exception as e:
             logging.error(f"An error occurred while processing audio: {str(e)}")
-            return False, None, None
+            return False, None, None, None
 
     def handle_new_connection(self, websocket):
         try:
