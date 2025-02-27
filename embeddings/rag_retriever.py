@@ -1,6 +1,7 @@
 import json
 from typing import List,Dict
 import os
+from datetime import datetime
 from cerebras.cloud.sdk import Cerebras
 import logging
 from utils.decorators import timer_decorator
@@ -10,7 +11,7 @@ class RAGRetriever:
     def __init__(
             self,
         ):
-        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-wdpk43pkx2n439jc9c8pf9wy5vrhtje6c8pyfcyvy9x3jnhc")
+        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-tem9deprv95yxkr552c8fvhnm54xftd3m5t4kp6n3kdk53pf") 
         self.client = Cerebras(api_key = CEREBRAS_API_KEY)
         self.model = "llama3.3-70b"
 
@@ -94,7 +95,7 @@ class RAGRetriever:
             return "I'm sorry, but I couldn't process your request at this time."
         except Exception as e:
             if "context_length_exceeded" in str(e):
-                print(f"[WARNING]    context_length_exceeded ---> Retrying... \n\n{e}")
+                print(f"[WARNING {datetime.now()}]    context_length_exceeded ---> Retrying... \n\n{e}")
                 return "context_length_exceeded"
             logging.error(f"Chat completion failed: {e}")
             return "I'm sorry, but I couldn't process your request at this time."

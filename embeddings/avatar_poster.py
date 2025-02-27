@@ -8,7 +8,7 @@ class AvatarPoster:
       2) Then POST to the /text endpoint with text, client_id, and lang.
     """
 
-    DEFAULT_BASE_URL = "http://47.186.25.253:50956"
+    DEFAULT_BASE_URL = "https://genavatars.plavno.app:50956"
 
     def __init__(self,
                  client_id: str,

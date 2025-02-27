@@ -1,3 +1,5 @@
+import json  
+
 import requests
 from typing import Any, Dict, Optional
 from utils.decorators import timer_decorator
@@ -61,7 +63,13 @@ class EmbeddingsClient:
         try:
             response = requests.post(url, json=payload, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
-            return response.json()
+
+            result = response.json()
+            with open('embeddings_response.json', 'a', encoding='utf-8') as f:
+                json.dump(result, f, indent=2, ensure_ascii=False)
+            
+            return result
+        
         except requests.exceptions.HTTPError as http_err:
             print(f"HTTP error occurred: {http_err} - Response: {response.text}")
         except requests.exceptions.ConnectionError as conn_err:

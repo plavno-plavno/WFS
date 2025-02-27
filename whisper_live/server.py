@@ -122,7 +122,6 @@ class TranscriptionServer:
             speaker_lang = parsed_data.get('speakerLang')
             index = parsed_data.get('index')
             audio_base64 = parsed_data.get('audio')
-            print(audio_base64[:10])
             if audio_base64:
                 # Decode base64 to bytes
                 audio_bytes = base64.b64decode(audio_base64)

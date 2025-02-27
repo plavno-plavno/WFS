@@ -2,6 +2,7 @@ import logging
 import threading
 import json
 import time
+from datetime import datetime
 import string
 import asyncio
 
@@ -14,37 +15,8 @@ from whisper_live.sentence_accumulator import SentenceAccumulator
 from whisper_live.sentence_accumulator_arabic import SentenceAccumulatorArabic
 
 
-idk_rag_answers_in_dif_langs = [
-    "لا أعرف إجابة هذا السؤال.",  # Arabic
-    "আমি এই প্রশ্নের উত্তর জানি না।",  # Bengali
-    "ငါဒီမေးခွန်းရဲ့အဖြေကိုမသိဘူး။",  # Burmese
-    "我不知道这个问题的答案。",  # Chinese (zh)
-    "من به این سوال پاسخ نمی‌دانم.",  # Dari
-    "Ik weet het antwoord op deze vraag niet.",  # Dutch
-    "I don't know the answer to this question.",  # English
-    "En tiedä vastausta tähän kysymykseen.",  # Finnish
-    "Ich weiß die Antwort auf diese Frage nicht.",  # German
-    "मुझे इस प्रश्न का उत्तर नहीं पता।",  # Hindi
-    "Saya tidak tahu jawaban untuk pertanyaan ini.",  # Indonesian
-    "ನಾನು ಈ ಪ್ರಶ್ನೆಗೆ ಉತ್ತರ ತಿಳಿದಿಲ್ಲ.",  # Kannada
-    "Мен бұл сұраққа жауап білмеймін.",  # Kazakh
-    "Saya tidak tahu jawapan kepada soalan ini.",  # Malay
-    "Kaore au e mohio ki te whakautu ki tenei patai.",  # Maori
-    "Jeg vet ikke svaret på dette spørsmålet.",  # Norwegian
-    "زه د دې پوښتنې ځواب نه پوهیږم.",  # Pashto
-    "من جواب این سوال را نمی‌دانم.",  # Persian
-    "Я не знаю ответа на этот вопрос.",  # Russian
-    "No sé la respuesta a esta pregunta.",  # Spanish
-    "Sijui jibu la swali hili.",  # Swahili
-    "Jag vet inte svaret på denna fråga.",  # Swedish
-    "Hindi ko alam ang sagot sa tanong na ito.",  # Tagalog
-    "நான் இந்த கேள்விக்கு பதில் தெரியாது.",  # Tamil
-    "నేను ఈ ప్రశ్నకు సమాధానం తెలియదు.",  # Telugu
-    "ང་འདི་ནི་དེ་འདྲ་བརྗེ་བའི་འབྲེལ་བ་མ་བྱུང་བའི་ཡིག་ཆ་ཡིན།",  # Tibetan
-    "میں اس سوال کا جواب نہیں جانتا۔",  # Urdu
-    "Men bu savolga javob bilmayman.",  # Uzbek
-    "Mo ko mọ idahun si ibeere yi.",  # Yoruba
-    "Angazi impendulo yalo mbuzo.",  # Zulu
+ignore_sentences = [
+    'Продолжение следует', 'DimaTorzok'
 ]
 
 
@@ -108,14 +80,12 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.current_text = ''
         self.avatar_poster = AvatarPoster(client_id=client_uid)
 
+        self.client_is_speaking = True
+        self.previous_transcription_time = time.time()
+
         # threading
         self.trans_thread = threading.Thread(target=self.speech_to_text,daemon=True)
         self.trans_thread.start()
-
-        self.previous_chunk_time = time.time()
-
-        self.check_silence_thread = threading.Thread(target=self.check_silence_from_client, daemon=True)
-        self.check_silence_thread.start()
 
         self.websocket.send(
             json.dumps(
@@ -222,18 +192,6 @@ class ServeClientFasterWhisper(ServeClientBase):
         return segments
     
 
-    def check_silence_from_client(self):
-        """
-        Checks if there is no speech from the client for 10 seconds and sends a ping to the client.
-        """
-        while not self.stop_event.is_set():
-            if self.previous_chunk_time and time.time() - self.previous_chunk_time > 10:
-                if not self.send_ping():
-                    self.stop_event.set()
-                print(f"[INFO {self.client_uid}]     No speech from client for 10 seconds, sending ping")
-                self.previous_chunk_time = time.time()
-            time.sleep(5)
-
     def handle_transcription_output(self, result, duration):
         """
         Handle the transcription output, updating the transcript.
@@ -246,13 +204,20 @@ class ServeClientFasterWhisper(ServeClientBase):
         if len(result):
             self.t_start = None
             last_segment = self.update_segments(result, duration)
-
             segments = self.prepare_segments(last_segment)
+            self.previous_transcription_time = time.time()
         else:
             # show previous output if there is pause i.e. no output from whisper
             segments = self.get_previous_output()
 
-        if len(segments) and segments[-1]['text'] != self.previous_segments[-1]['text']:
+        if len(segments):
+            self.client_is_speaking = True
+            if self.sending_answer_running:
+                self.sending_answer_running = False
+                sending_stop_request = threading.Thread(target=self.avatar_poster.send_stop_request,
+                                                        args=(), daemon=True)
+                sending_stop_request.start()
+
             self.send_transcription_to_client(segments)
             self.previous_segments = segments
 
@@ -260,38 +225,33 @@ class ServeClientFasterWhisper(ServeClientBase):
     def get_embeddings_and_rag_thread(self, query: str):
         self.avatar_poster.send_stop_request()
         top_k = 26
-
+        print(f'[INFO {self.client_uid} {datetime.now()}]    Sent embeddings request.')
         embeddings = self.embedder.get_embeddings(
             query=query,
             top_k=top_k,
             index_name=self.index
         )
-
+        print(f'[INFO {self.client_uid} {datetime.now()}]    Got embeddings.')
         result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
+        print(f'[INFO {self.client_uid} {datetime.now()}]    Got answer.')
 
         while result == "context_length_exceeded":
             top_k -= 2
+            print(f'[INFO {self.client_uid} {datetime.now()}]    Sent embeddings request again.')
             embeddings = self.embedder.get_embeddings(
                 query=query,
                 top_k=top_k,
                 index_name=self.index
             )
+            print(f'[INFO {self.client_uid} {datetime.now()}]    Got embeddings.')
             result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
+            print(f'[INFO {self.client_uid} {datetime.now()}]    Got answer.')
             
         response = result if isinstance(result, str) else result.get("response", None)
 
-        if response in idk_rag_answers_in_dif_langs or response == "I cant process this reques at  this time":
-            embeddings = self.embedder.get_embeddings(
-                query=query,
-                top_k=top_k,
-                index_name=self.index
-            )
-            result = self.ragRetriever.retrieve_context(embeddings, query, self.speaker_lang)
-            response = result if isinstance(result, str) else result.get("response", None)
-
         if response is not None and self.current_text == query:
             avatar_response = self.avatar_poster.send_text_request(text=response, lang=self.speaker_lang)
-            print(f"[INFO {self.client_uid}]     Sent RAG text answer to [AVATAR]: {response}")
+            print(f"[INFO {self.client_uid} {datetime.now()}]     Sent RAG text answer to [AVATAR]: {response}")
 
             time.sleep(2)
             self.sending_answer_running = True
@@ -316,7 +276,6 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         """
         translation_thread = None
-        last_zero_duration_time = None
         while not self.stop_event.is_set():
             if self.exit:
                 print("Exiting speech to text thread")
@@ -329,43 +288,33 @@ class ServeClientFasterWhisper(ServeClientBase):
             if not client:
                 print(f"[WARNING {self.client_uid}]     CLIENT DEAD")
                 break
-            
-            if self.micro_stopped.is_set():
-                self.micro_stopped.clear()
-                if self.translation_accumulated_text != "":
+
+            self.clip_audio_if_no_valid_segment()
+            input_bytes, duration = self.get_audio_chunk_for_processing()
+            if duration < 1.0:
+                if self.previous_transcription_time > 1.0 and self.translation_accumulated_text != "":
+                    self.client_is_speaking = False
                     self.current_text = self.translation_accumulated_text
-                    self.previous_chunk_time = time.time()
-                    print(f"[INFO {self.client_uid}]     No output from MICROPHONE, using previous output: {self.translation_accumulated_text}")
-                    if translation_thread and translation_thread.is_alive():
-                        self.sending_answer_running = False
+                    print(f"[INFO {self.client_uid} {time.time()} {datetime.now()}     No output from Whisper, using previous output: {self.translation_accumulated_text}")
                     
+                    self.send_transcription_to_client(self.previous_segments, last=True)
                     translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
                                                           args=(self.translation_accumulated_text,), daemon=True)
                     translation_thread.start()
                     self.translation_accumulated_text=""
-                    continue
-
-            self.clip_audio_if_no_valid_segment()
-
-            input_bytes, duration = self.get_audio_chunk_for_processing()
-            if duration < 1.0:
-                if last_zero_duration_time is not None and time.time() - last_zero_duration_time  >= 1.0:
-                    self.set_stop_micro_flag()
-                if duration == 0.0 and last_zero_duration_time is None:
-                    last_zero_duration_time = time.time()
                 time.sleep(0.1)
                 continue
-            last_zero_duration_time = None
+
             try:
                 input_sample = input_bytes.copy()
                 result = self.transcribe_audio(input_sample)
+                
                 if result is None and self.translation_accumulated_text != "":
+                    self.client_is_speaking = False
                     self.current_text = self.translation_accumulated_text
-                    self.previous_chunk_time = time.time()
-                    print(f"[INFO {self.client_uid}]     No output from Whisper, using previous output: {self.translation_accumulated_text}")
-                    if translation_thread and translation_thread.is_alive():
-                        self.sending_answer_running = False
+                    print(f"[INFO {self.client_uid} {time.time()} {datetime.now()}     No output from Whisper, using previous output: {self.translation_accumulated_text}")
                     
+                    self.send_transcription_to_client(self.previous_segments, last=True)
                     translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread,
                                                           args=(self.translation_accumulated_text,), daemon=True)
                     translation_thread.start()
@@ -471,12 +420,6 @@ class ServeClientFasterWhisper(ServeClientBase):
                 and self.translation_accumulated_text):
 
             if rtl_language:
-                # Check duplicates in RTL scenario
-                # if not self._is_duplicate_rtl():
-                #     print(f"[INFO]     397")
-                #     translation_thread = threading.Thread(target=self.get_embeddings_and_rag_thread, args=(self.translation_accumulated_text,), daemon=True)
-                #     translation_thread.start()
-                # else:
                 if self._is_duplicate_rtl():
                     print(" **** CAUGHT DUPLICATE (RTL) **** ")
                     self.previous_translation_accumulated_text = ""

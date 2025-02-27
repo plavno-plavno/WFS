@@ -2,6 +2,7 @@ import json
 import logging
 import threading
 import time
+from datetime import datetime
 
 import numpy as np
 
@@ -31,9 +32,8 @@ class ServeClientBase(object):
         self.all_langs = None
         self.speaker_lang = None
         self.server = server
-        self.index = '_52d7dc9d_ecaa_4489_87c8_845f58accf4e' 
+        self.index = '_18f0b7c3_cc64_4295_ba5f_9cdcf106ec23' 
         self.sending_answer_running = False  # flag for stopping stream answer sending if new question starts
-        self.previous_chunk_time = None  # time of the previous chunk to ping client if no speech for 10 seconds
         self.micro_stopped = threading.Event()
         
         # text formatting
@@ -164,22 +164,8 @@ class ServeClientBase(object):
         """
         return input_bytes.shape[0] / self.RATE
     
-    def send_ping(self):
-        """
-        Sends a ping message to the client to check if the connection is still active.
 
-        This method sends a ping message to the client to check if the connection is still active.
-        """
-        if self.exit:  # Check if the client is marked for exit
-            return False
-        try:
-            self.websocket.send(json.dumps({"uid": self.client_uid, "type": "ping"}))
-            return True
-        except Exception as e:
-            logging.error(f"[ERROR {self.client_uid}]     SEND PING TO CLIENT CONNECTION BROKEN",)
-            return False
-
-    def send_transcription_to_client(self, segments):
+    def send_transcription_to_client(self, segments, last=False):
         """
         Sends the specified transcription segments to the client over the websocket connection.
 
@@ -193,12 +179,13 @@ class ServeClientBase(object):
             "uid": self.client_uid,
             "type": "question",
             "segments": segments,
+            "last": last
         }        
                 
         try:            
             # Send to the primary client
             self.websocket.send(json.dumps(message))
-            print(f"[INFO {self.client_uid}]     Sent transcription to [CLIENT]: {message}")
+            print(f"[INFO {self.client_uid} {datetime.now()}]     Sent transcription to [CLIENT]: {message}")
 
         except Exception as e:
             logging.error(f"[ERROR {self.client_uid}]     SEND TRANSCRIPTION TO CLIENT CONNECTION BROKEN",)
