@@ -2,7 +2,7 @@
 
 # Extract ID and IP
 ID=$(grep -o "C\.[0-9]*" /root/.vast_containerlabel | sed 's/C\.//')
-IP=$(wget -qO- ifconfig.me)
+IP=$(curl -s ifconfig.co)
 
 # Log ID and IP for debugging
 echo "Extracted ID: $ID"
@@ -44,10 +44,14 @@ create_a_record() {
 setup_vast_ai_label() {
     local label="c_${ID}"
 
-    # Check if Vast.ai CLI is installed
+    # Check if vastai CLI is installed, install it if not
     if ! command -v vastai &> /dev/null; then
-        echo "Error: Vast.ai CLI (vastai) is not installed."
-        return 1
+        echo "vastai CLI could not be found. Installing it using pip..."
+        pip install --upgrade vastai
+        if [ $? -ne 0 ]; then
+            echo "Failed to install vastai CLI. Please check your Python and pip installation."
+            exit 1
+        fi
     fi
 
     # Assign the label to the machine using the CLI
@@ -62,7 +66,7 @@ setup_vast_ai_label() {
 }
 
 # Call the Cloudflare A record creation function
-create_a_record "c${ID}" $IP
+create_a_record "c${ID}" "$IP"
 
 # Call the Vast.ai label setup function
 setup_vast_ai_label

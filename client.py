@@ -1,9 +1,9 @@
 from whisper_live.client import TranscriptionClient
-
+#193.69.10.15:50506
 client = TranscriptionClient(
-    host ="c18136649.plavno.app",
-    port = 55375,
-    lang="ru",
+    host ="127.0.0.1",
+    port = 9090,
+    lang="en",
     translate=False,
     model="large-v3",
     use_vad=True,
@@ -13,7 +13,3 @@ client = TranscriptionClient(
 )
 
 client()
-
-
-
-# Автором этой книги является Антуан де Сент-Экзюпери, но в данном контексте речь идет о книге «Государь» Никколо Макиавелли.
