@@ -55,6 +55,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.stop_event = threading.Event()
         self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
+        self.disable_sentence_cutter = False
         self.return_translated_segments = False
         self.translation_id = 1
         self.translation_accumulated_text = ''
@@ -76,6 +77,10 @@ class ServeClientFasterWhisper(ServeClientBase):
             )
         )
 
+
+
+    def set_disable_sentence_cutter(self, flag):
+        self.disable_sentence_cutter = flag
 
     def set_return_translated_segments(self,flag):
         self.return_translated_segments = flag
@@ -398,7 +403,11 @@ class ServeClientFasterWhisper(ServeClientBase):
 
             # (C2) LTR: send immediately
             else:
-                processed = self.sa.process_segment(text)
+                if not self.disable_sentence_cutter:
+                    processed = self.sa.process_segment(text)
+                else:
+                    processed = text
+
                 if processed:
                     self.translation_accumulated_text = processed
                     translation_thread = threading.Thread(target=self.translate_and_send_thread, daemon=True)

@@ -11,16 +11,19 @@ class CerebrasTranslator(LlamaTranslator):
 
 class LoadBalancedTranslator:
     def __init__(self, translators: List[Any] = None):
-        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "csk-tem9deprv95yxkr552c8fvhnm54xftd3m5t4kp6n3kdk53pf")
+        CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY", "")
         self.counter = 0
         self.buffer_text = []
-        if translators:
-            self.translators = [translator(buffer_text=self.buffer_text) for translator in translators]
+        if CEREBRAS_API_KEY:
+            if translators:
+                self.translators = [translator(buffer_text=self.buffer_text) for translator in translators]
+            else:
+                self.translators = [
+                    CerebrasTranslator(client=Cerebras(api_key = CEREBRAS_API_KEY),
+                                       buffer_text=self.buffer_text),
+                ]
         else:
-            self.translators = [
-                CerebrasTranslator(client=Cerebras(api_key = CEREBRAS_API_KEY),
-                                   buffer_text=self.buffer_text),
-            ]
+            print('Cerebras key is not provided - set CEREBRAS_API_KEY os variable')
 
     def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
         translator_index = self.counter % len(self.translators)
