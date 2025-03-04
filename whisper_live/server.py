@@ -159,8 +159,7 @@ class TranscriptionServer:
 
         if client is False or frame_np is False or frame_np is None or frame_np.size == 0:
             return False
-        return_translated_segments=True
-        is_stream_started=True
+
         client.set_speaker_lang(speaker_lang)
         client.set_all_langs(all_langs)
         client.add_frames(frame_np)
