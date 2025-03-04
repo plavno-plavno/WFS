@@ -3,7 +3,7 @@ import logging
 import asyncio
 from aiohttp import web
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 
 
 async def check_availability(request: web.Request) -> web.Response:

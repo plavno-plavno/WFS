@@ -55,7 +55,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.stop_event = threading.Event()
         self.previous_translation_accumulated_text = ""
         self.previous_segment_ready = False
-
+        self.return_translated_segments = False
         self.translation_id = 1
         self.translation_accumulated_text = ''
         self.translation_start_time = "0.0"
@@ -75,6 +75,10 @@ class ServeClientFasterWhisper(ServeClientBase):
                 }
             )
         )
+
+
+    def set_return_translated_segments(self,flag):
+        self.return_translated_segments = flag
 
     def set_is_stream_started(self,flag):
         self.is_stream_started = flag
@@ -195,6 +199,10 @@ class ServeClientFasterWhisper(ServeClientBase):
         translations = self.prepare_translations()
         if self.is_stream_started:
             self.send_translations_to_all_listeners(translations)
+            if self.return_translated_segments:
+                print('Translations to speaker')
+                print(translations)
+                self.send_transcription_to_client(translations)
 
     def speech_to_text(self):
         """
@@ -267,7 +275,8 @@ class ServeClientFasterWhisper(ServeClientBase):
         self.trans_thread.join(timeout=3)  # Adjust timeout as needed
 
         if self.trans_thread.is_alive():
-            print("Thread did not terminate within the timeout period.")
+            print("Thread did not terminate within"
+                  "the timeout period.")
         else:
             print("Transcription thread has been successfully stopped.")
 

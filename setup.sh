@@ -67,4 +67,6 @@ fi
 
 # Install Python packages
 $PIP_CMD install -r ./requirements/server.txt
+$PIP_CMD install aiohttp
 $PIP_CMD install ctranslate2==4.4.0
+
