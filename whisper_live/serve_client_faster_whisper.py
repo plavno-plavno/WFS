@@ -123,6 +123,7 @@ class ServeClientFasterWhisper(ServeClientBase):
         """
         if info.language_probability > 0.5:
             self.language = info.language
+            self.speaker_lang = info.language
             logging.info(f"Detected language {self.language} with probability {info.language_probability}")
             self.websocket.send(json.dumps(
                 {"uid": self.client_uid, "language": self.language, "language_prob": info.language_probability}))
@@ -289,6 +290,7 @@ class ServeClientFasterWhisper(ServeClientBase):
 
         print("=========================+================================")
         print(f"SPEAKER LANG: {self.speaker_lang}")
+
         if isinstance(message, tuple):
             try:
                 # Assuming message is a tuple of key-value pairs
@@ -296,13 +298,15 @@ class ServeClientFasterWhisper(ServeClientBase):
             except (TypeError, ValueError) as e:
                 print(f"[ERROR] Unable to convert tuple to dict: {e}")
                 return
-        for k, v in message.items():
-            if k == "translate":
-                print(k.upper(), " :")
-                for lang, translated_text in v.items():
-                    print(f" - {lang.upper()} - {translated_text}")
-            else:
-                print(f"{k.upper()} - {v}")
+
+        if self.speaker_lang is not None:
+            for k, v in message.items():
+                if k == "translate":
+                    print(k.upper(), " :")
+                    for lang, translated_text in v.items():
+                        print(f" - {lang.upper()} - {translated_text}")
+                else:
+                    print(f"{k.upper()} - {v}")
 
     def send_translations_to_all_listeners(self, translations):
         """
