@@ -2,7 +2,7 @@
 
 # Extract ID and IP
 ID=$(grep -o "C\.[0-9]*" /root/.vast_containerlabel | sed 's/C\.//')
-IP=$(wget -qO- ifconfig.me)
+IP=$(curl -s ifconfig.co)
 
 # Log ID and IP for debugging
 echo "Extracted ID: $ID"
