@@ -93,43 +93,60 @@ class TranscriptionServer:
 
         self.speaker_manager.add_client(websocket, client)
 
+
     def get_audio_from_websocket(self, websocket):
         """
-        Receives audio buffer from websocket and creates a numpy array from it.
+        Receives an audio buffer from the websocket and creates a numpy array from it.
+        
         Args:
-            websocket: The websocket to receive audio from.
+            websocket: The websocket from which to receive audio data.
+        
         Returns:
-            A numpy array containing the audio, or False in case of an error.
+            tuple: A tuple containing:
+                - audio_np (numpy.ndarray or bool): A numpy array with the audio data if available, 
+                or False in case of an error or if no audio is present.
+                - speaker_lang (str or None): The speaker's language, if provided.
+                - all_langs (any): All languages provided in the message.
+                - is_stream_started (bool or None): Boolean indicating if the stream has started.
+                - return_translated_segments (bool or None): Flag indicating if translated segments should be returned.
+                - disable_sentence_cutter (bool or None): Flag to disable sentence cutter.
+                
+            Special commands:
+                - If the websocket sends b"END_OF_AUDIO", returns (False, None, None, None, None, None).
+                - If the websocket sends b"LISTENER", returns (True, None, None, None, None, None).
         """
-        data = websocket.recv()
-        if data == b"END_OF_AUDIO":
-            return False, None, None
-        if data == b"LISTENER":
-            return True, None, None
         try:
-            parsed_data = json.loads(data)
+            data = websocket.recv()
+            
+            # Handle special command messages
+            if data == b"END_OF_AUDIO":
+                return False, None, None, None, None, None
+            if data == b"LISTENER":
+                return True, None, None, None, None, None
+            
+            # Decode the received bytes to a string before parsing as JSON
+            decoded_data = data.decode('utf-8')
+            parsed_data = json.loads(decoded_data)
+            
             speaker_lang = parsed_data.get('speakerLang')
             all_langs = parsed_data.get('allLangs')
             audio_base64 = parsed_data.get('audio')
-            is_stream_started = parsed_data.get('isStartStream',True)
+            is_stream_started = parsed_data.get('isStartStream', True)
             return_translated_segments = parsed_data.get('returnTranslatedSegments', False)
             disable_sentence_cutter = parsed_data.get('disableSentenceCutter', False)
-
-
+            
             if audio_base64:
-                # Decode base64 to bytes
+                # Decode the base64-encoded audio to bytes
                 audio_bytes = base64.b64decode(audio_base64)
-                # Convert bytes to numpy array
+                # Convert bytes to a numpy array assuming float32 format
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                return audio_np, speaker_lang, all_langs, is_stream_started, return_translated_segments,disable_sentence_cutter
+                return audio_np, speaker_lang, all_langs, is_stream_started, return_translated_segments, disable_sentence_cutter
             else:
-                return False, None, None
-        except json.JSONDecodeError as e:
-            logging.error(f"JSON Decoding Error: Unable to parse JSON data. Details: {str(e)}")
-            return False, None, None
+                return False, None, None, None, None, None
         except Exception as e:
-            logging.error(f"An error occurred while processing audio: {str(e)}")
-            return False, None, None
+            # Optionally log the exception e here for debugging
+            return False, None, None, None, None, None
+
 
     def handle_new_connection(self, websocket):
         try:
