@@ -125,8 +125,7 @@ class TranscriptionServer:
                 return True, None, None, None, None, None
             
             # Decode the received bytes to a string before parsing as JSON
-            decoded_data = data.decode('utf-8')
-            parsed_data = json.loads(decoded_data)
+            parsed_data = json.loads(data)
             
             speaker_lang = parsed_data.get('speakerLang')
             all_langs = parsed_data.get('allLangs')
