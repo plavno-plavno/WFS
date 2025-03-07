@@ -4,7 +4,14 @@ import json
 
 from typing import Any, Callable, Dict, List
 from functools import wraps
+from translation_tools.llama.prompts.khutba import generate_translation_context as khutba
+from translation_tools.llama.prompts.khutba import generate_translation_context as universal
 
+# Create a dictionary to map function names to functions
+translation_functions = {
+    "khutba": khutba,
+    "universal": universal
+}
 
 LANGUAGE_EXAMPLES = {
     "af": "Die gesin is die grondslag.",
@@ -122,6 +129,36 @@ def timer_decorator(func):
     return wrapper
 
 
+def get_prompt_context(prompt, src_lang, tgt_langs, buffer_text, example_response,
+                     phrase_to_translate):
+    """
+    Translates a phrase using the specified translation function.
+
+    Args:
+        prompt (dict): A dictionary mapping function keys to translation functions.
+        src_lang (str): The source language.
+        tgt_langs (list): A list of target languages.
+        buffer_text (list): A list of previous phrases for context.
+        example_response (str): An example response in JSON format.
+        phrase_to_translate (str): The phrase to translate.
+
+    Returns:
+        str: The translated result, or None if the function key is not found.
+    """
+    if(prompt is None):
+        prompt = 'universal'
+
+    # Get the function from the dictionary
+    function = translation_functions.get(prompt)
+
+    # If the function exists, call it with the provided arguments
+    if function:
+        result = function(src_lang, tgt_langs, buffer_text, example_response, phrase_to_translate)
+        return result
+    else:
+        print("Function not found!")
+        return None
+
 def clean_json_string(json_string: str) -> str:
     json_string = re.sub(r"\\'", "'", json_string)
     return json_string
@@ -194,45 +231,8 @@ class LlamaTranslator:
 
     @timer_decorator
     @retry_on_error(max_retries=2, retry_delay=0.50)
-    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}) -> Dict[str, str]:
-        context = f"""Expert translator: Translate from {src_lang} to {', '.join(tgt_langs)}.
-        Important rules:
-        1. Return strict JSON format as provided in a example response with ISO 2-letter language codes
-        2. Keep exact structure as in example
-        3. Maintain original meaning without additions
-        4. Include all specified target languages
-        5. Use previous context for reference and try to maintain connection to current phrases translation: < {" ".join(self.buffer_text)} >
-        6. Ensure that any fragments of sentences that appear mistakenly from previous phrases are removed to maintain coherence and accuracy in translation.
-        7.Key phrases as recommendations on how they should be translated:
-            "سيدنا ونبينا محمد رسول الله --> Our Master Allah and Prophet Muhammad, the messenger of Allah",
-            "أما بعد فأوصيكم عباد الله ونفسي بتقوى الله  --> After this, I, as a servant of Allah and myself, advise you to fear Allah",
-            "أزواجكم بنينا وحفدا   --> Your wives and children are your descendants",
-            "من استطاع  --> Whoever among you",
-            "منكم الباءة --> Those who can afford to marry",
-            "أضيق --> If they should be poor",
-            "ومودتها --> her affection",
-            "وتجنون ثمراتها أولادا بارين يحملون اسمكم --> And you will reap the fruits thereof, children who bear your names",
-            "يكونون دخرا لكم في كباركم --> They will be a source of provision for you in your old age",
-            "على ما فيه محق --> On what brings benefit",
-        8. NEVER USE "diety" word in a translations,
-
-        Additional rules:
-            "The text is related to Muslims and religion, and the speech belongs to an imam of a mosque.",
-            "Never use the word 'lord' in a sentence where Prophet Muhammad is mentioned, instead, use the word 'master'.",
-            "Do not translate sentences containing the word 'subtitles', 'Subscribe to the channel', 'Nancy's translation' or 'subtitle', replace these sentences with a space symbol",
-            "Use 'thereafter' instead of 'and after that.'",
-            "Translate 'Allah' as 'Allah' to maintain its original meaning.",
-            "Avoid adding interpretations that may alter the meaning of the religious text.",
-            "Be aware of cultural and linguistic nuances specific to Islamic texts and traditions.",
-            "Use precise and accurate translations of Islamic terminology, such as 'Quran,' 'Hadith,' 'Sunna,' and 'Sharia.'",
-            "Avoid using language that may be perceived as disrespectful or insensitive to Islamic values and principles.",
-            "Ensure that the structure of the original text is preserved in the translation."
-            "Avoid any blasphemy to islamic translation"
-
-        Example response (strictly follow this format):
-        {example_response}
-        Text to translate: {text}"""
-        
+    def translate(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, example_response={}, prompt=None) -> Dict[str, str]:
+        context = get_prompt_context(prompt,src_lang,tgt_langs,self.buffer_text, example_response,text)
         completion = self.client.chat.completions.create(
             messages=[
                 {
@@ -251,14 +251,14 @@ class LlamaTranslator:
         )
         return completion.choices[0].message.content
 
-    def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None) -> Dict[str, str]:
+    def get_translations(self, text: str, src_lang: str = "ar", tgt_langs: List[str] = None, prompt=None) -> Dict[str, str]:
         if tgt_langs is None:
             tgt_langs = ["ar", "en", "fa", "ru", "ur"]
         translations = {"translate": {}}
         tgt_lang_chunks = self.split_into_chunks(tgt_langs)
         for tgt_lang_chunk in tgt_lang_chunks:
             example_response = self.get_example_response(tgt_lang_chunk)
-            chunk_translations = self.translate(text, src_lang, tgt_lang_chunk, example_response)
+            chunk_translations = self.translate(text, src_lang, tgt_lang_chunk, example_response,prompt)
             translations["translate"].update(chunk_translations["translate"])
         if self.own_buffer:
             self.buffer_text.append(text)
